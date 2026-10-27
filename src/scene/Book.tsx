@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { Spread } from '../content/deriveSpreads'
+import { getFreeze } from '../dev/freeze'
 import { getBookState, useBookStore } from '../state/bookState'
 import { easeInOutCubic, progressAt } from '../state/timing'
 import { Page, PAGE_HEIGHT, PAGE_WIDTH, type PageText } from './Page'
+import { TurnLayer, type TurnSheet } from './TurnLayer'
 
 /**
  * The closed hardcover and its page block.
@@ -33,15 +35,54 @@ export interface BookProps {
   readonly pageText: ReadonlyMap<string, PageText>
 }
 
+/** One spread's pair of static sheets, by index into `spreads`. */
+interface StaticPages {
+  readonly left: number
+  readonly right: number
+}
+
 export function Book({ spreads, pageText }: BookProps) {
+  // Discrete facts only: `spread` moves when a command does, `phase` and `turn`
+  // flip at most twice per transition. Nothing here re-renders per frame.
   const spreadIndex = useBookStore((state) => state.spread)
+  const phase = useBookStore((state) => state.phase)
+  const turn = useBookStore((state) => state.turn)
   const coverRef = useRef<THREE.Group>(null)
   const leftPageRef = useRef<THREE.Group>(null)
 
+  const lastIndex = Math.max(spreads.length - 1, 0)
   const index = Math.max(0, Math.min(spreadIndex, spreads.length - 1))
-  const spread = spreads[index]
-  const leftText = spread === undefined ? undefined : pageText.get(spread.left.key)
-  const rightText = spread === undefined ? undefined : pageText.get(spread.right.key)
+  const freeze = getFreeze()
+
+  /** A still for look-dev: the store stays OPEN, the sheet never commits. */
+  const frozen = useMemo<TurnSheet | null>(() => {
+    if (freeze === null || phase !== 'OPEN') return null
+    const to = Math.min(Math.max(index + freeze.dir, 0), lastIndex)
+    return { from: index, to, dir: freeze.dir }
+  }, [freeze, phase, index, lastIndex])
+
+  /** The sheet in the air: the store's live turn while TURNING, else a frozen one. */
+  const sheet = useMemo<TurnSheet | null>(() => {
+    if (turn !== null) return { from: turn.from, to: turn.to, dir: turn.dir }
+    return frozen
+  }, [turn, frozen])
+
+  /**
+   * Which static sheets flank the spine. Each one only changes while the
+   * turning sheet is lying on top of it (see `TurnLayer` for the table), so the
+   * page underneath can swap without a pop.
+   */
+  const staticPages = useMemo<StaticPages>(() => {
+    if (sheet === null) return { left: index, right: index }
+    return sheet.dir === 1
+      ? { left: sheet.from, right: sheet.to }
+      : { left: sheet.to, right: sheet.from }
+  }, [sheet, index])
+
+  const leftSpread = spreads[staticPages.left]
+  const rightSpread = spreads[staticPages.right]
+  const leftText = leftSpread === undefined ? undefined : pageText.get(leftSpread.left.key)
+  const rightText = rightSpread === undefined ? undefined : pageText.get(rightSpread.right.key)
 
   /** Clicking the closed book opens it; an open book ignores page clicks for now. */
   const handleClick = useCallback((event: ThreeEvent<MouseEvent>) => {
@@ -83,8 +124,7 @@ export function Book({ spreads, pageText }: BookProps) {
     cover.rotation.z = progress * Math.PI
 
     // The left sheet only exists once the cover has swung past vertical; while
-    // the book is closed it would stick out under the fore edge. TODO(T7): the
-    // turn animation replaces this with a real page life cycle.
+    // the book is closed it would stick out under the fore edge.
     leftPage.visible = progress > 0.5
 
     if (open !== null && progressAt(open, now) >= 1) {
@@ -92,10 +132,11 @@ export function Book({ spreads, pageText }: BookProps) {
       else if (state.phase === 'CLOSING') state.commitClose()
     }
 
-    // TODO(T7): the page curl hooks in here. Until it exists, a TURNING phase
-    // has no animation and is committed by the next navigation command (see
-    // App.tsx); the book state, not this mesh, is the source of truth.
+    // The page turn itself lives in `TurnLayer`: it poses the skinned sheet and
+    // commits the turn when the sheet has landed.
   })
+
+  const bookOpen = phase === 'OPEN' || phase === 'TURNING'
 
   return (
     <group position={[0, BOOK_LIFT, 0]}>
@@ -122,11 +163,11 @@ export function Book({ spreads, pageText }: BookProps) {
 
       {/* Left sheet rests on the opened cover; hidden while closed. */}
       <group ref={leftPageRef} visible={false}>
-        {leftText !== undefined && spread !== undefined && (
+        {leftText !== undefined && leftSpread !== undefined && (
           <Page
-            key={spread.left.key}
+            key={leftSpread.left.key}
             side="left"
-            pageKey={spread.left.key}
+            pageKey={leftSpread.left.key}
             text={leftText}
             y={LEFT_PAGE_Y}
           />
@@ -134,13 +175,27 @@ export function Book({ spreads, pageText }: BookProps) {
       </group>
 
       {/* Right sheet sits on top of the page block. */}
-      {rightText !== undefined && spread !== undefined && (
+      {rightText !== undefined && rightSpread !== undefined && (
         <Page
-          key={spread.right.key}
+          key={rightSpread.right.key}
           side="right"
-          pageKey={spread.right.key}
+          pageKey={rightSpread.right.key}
           text={rightText}
           y={RIGHT_PAGE_Y}
+        />
+      )}
+
+      {/* The sheet in the air. Mounted whenever the book is open so the rig and
+          its textures exist before the first turn needs them. */}
+      {bookOpen && (
+        <TurnLayer
+          spreads={spreads}
+          pageText={pageText}
+          sheet={sheet}
+          restIndex={index}
+          fixedProgress={frozen === null || freeze === null ? null : freeze.progress}
+          rightPageY={RIGHT_PAGE_Y}
+          leftPageY={LEFT_PAGE_Y}
         />
       )}
 

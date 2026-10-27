@@ -61,7 +61,8 @@ function buildUnitWeights(): readonly number[] {
 
 const UNIT_WEIGHTS = buildUnitWeights()
 
-const clamp01 = (value: number): number => (value < 0 ? 0 : value > 1 ? 1 : value)
+const clamp01 = (value: number): number =>
+  Number.isNaN(value) ? 0 : value < 0 ? 0 : value > 1 ? 1 : value
 
 /**
  * Writes a pose into a caller-owned object. No allocation, so `useFrame` can

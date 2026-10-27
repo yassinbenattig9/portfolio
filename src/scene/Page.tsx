@@ -136,14 +136,83 @@ function createPageTexture(side: PageSide, pageKey: string, text: PageText): THR
   return texture
 }
 
+/** A shared page texture plus one holder's claim on it. */
+export interface PageTextureLease {
+  readonly texture: THREE.CanvasTexture
+  /** Drops this claim; the texture is disposed when the last claim leaves. */
+  readonly release: () => void
+}
+
+interface PageTextureEntry {
+  readonly texture: THREE.CanvasTexture
+  /** The copy this canvas was drawn from; a reload replaces the canvas. */
+  readonly text: PageText
+  refs: number
+}
+
+/**
+ * The one page-texture cache. A page can be on screen twice at once (the static
+ * sheet and the turning sheet share a texture), so entries are reference
+ * counted: the last holder releases the canvas and its GPU upload.
+ */
+const textureCache = new Map<string, PageTextureEntry>()
+
+function leasePageTexture(key: string, entry: PageTextureEntry): PageTextureLease {
+  let released = false
+  return {
+    texture: entry.texture,
+    release: () => {
+      if (released) return
+      released = true
+      entry.refs -= 1
+      if (entry.refs > 0) return
+      if (textureCache.get(key) === entry) textureCache.delete(key)
+      entry.texture.dispose()
+    },
+  }
+}
+
+/**
+ * Takes a claim on the cached texture for this page, drawing it on first use.
+ * `Page` and the turning sheet both go through here, so a page has one canvas
+ * and one upload no matter how many meshes print it.
+ */
+export function acquirePageTexture(
+  side: PageSide,
+  pageKey: string,
+  text: PageText,
+): PageTextureLease {
+  const key = `${side}:${pageKey}`
+  const existing = textureCache.get(key)
+
+  if (existing !== undefined && existing.text === text) {
+    existing.refs += 1
+    return leasePageTexture(key, existing)
+  }
+
+  if (existing !== undefined) {
+    textureCache.delete(key)
+    existing.texture.dispose()
+  }
+
+  const entry: PageTextureEntry = {
+    texture: createPageTexture(side, pageKey, text),
+    text,
+    refs: 1,
+  }
+  textureCache.set(key, entry)
+  return leasePageTexture(key, entry)
+}
+
 export function Page({ side, pageKey, text, y }: PageProps) {
-  const texture = useMemo(
-    () => createPageTexture(side, pageKey, text),
+  const lease = useMemo(
+    () => acquirePageTexture(side, pageKey, text),
     [side, pageKey, text],
   )
+  const texture = lease.texture
 
-  // CanvasTexture owns a canvas plus a GPU upload: release both on unmount.
-  useEffect(() => () => texture.dispose(), [texture])
+  // CanvasTexture owns a canvas plus a GPU upload: drop this claim on unmount.
+  useEffect(() => () => lease.release(), [lease])
 
   return (
     <group rotation-y={side === 'left' ? Math.PI : 0}>
