@@ -1,9 +1,11 @@
-import { useEffect, useMemo } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { deriveSpreads, type Spread } from './content/deriveSpreads'
 import { loadContent } from './content/loadContent'
 import type { Portfolio } from './content/schema'
-import { Scene } from './scene/Scene'
-import { getBookState, useBookStore, type BookPhase } from './state/bookState'
+import { getBookState, useBookStore } from './state/bookState'
+import { Hint } from './ui/Hint'
+import { detectWebGL, NoWebGL } from './ui/NoWebGL'
+import { TopBar } from './ui/TopBar'
 
 interface LoadedContent {
   readonly content: Portfolio
@@ -12,13 +14,13 @@ interface LoadedContent {
 
 const EMPTY_SPREADS: readonly Spread[] = []
 
-const HINTS: Readonly<Record<BookPhase, string>> = {
-  CLOSED: 'Click the book or press Space to open',
-  OPENING: 'Opening…',
-  OPEN: 'Left / Right turn pages · Esc closes',
-  TURNING: 'Turning…',
-  CLOSING: 'Closing…',
-}
+/**
+ * The lazy boundary (plan §7.7): `src/scene` is the only place that imports
+ * three and React Three Fiber, so this dynamic import splits the whole 3D
+ * bundle into its own chunk that loads after the 2D shell has painted.
+ * `Scene` is a named export, hence the explicit `default` mapping.
+ */
+const Scene = lazy(() => import('./scene/Scene').then((module) => ({ default: module.Scene })))
 
 function App() {
   const loaded = useMemo<{ data: LoadedContent | null; error: string | null }>(() => {
@@ -31,6 +33,10 @@ function App() {
       return { data: null, error: error instanceof Error ? error.message : String(error) }
     }
   }, [])
+
+  // Probed once, on the client, before the scene is ever requested: without
+  // WebGL the 3D chunk is not downloaded at all.
+  const [hasWebGL] = useState<boolean>(detectWebGL)
 
   const phase = useBookStore((state) => state.phase)
   const setSpreadCount = useBookStore((state) => state.setSpreadCount)
@@ -47,11 +53,12 @@ function App() {
       if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return
 
       const target = event.target
-      if (
-        target instanceof HTMLElement &&
-        (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
-      ) {
-        return
+      if (target instanceof HTMLElement) {
+        // Never steal a key from a form control, an editable region or a link:
+        // Enter on "Plain version" must navigate, not open the book.
+        if (target.isContentEditable) return
+        if (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'A'].includes(target.tagName)) return
+        if (target.closest('[role="button"]') !== null) return
       }
 
       const now = performance.now()
@@ -106,15 +113,36 @@ function App() {
     )
   }
 
+  const { content } = loaded.data
+
   return (
     <main className="app">
       <h1 className="visually-hidden">The Logbook — interactive portfolio</h1>
-      <div className="app__scene">
-        <Scene spreads={loaded.data.spreads} content={loaded.data.content} />
-      </div>
-      <p className="app__hint" aria-live="polite">
-        {HINTS[phase]}
-      </p>
+      <TopBar site={content.site} contact={content.contact} />
+
+      {hasWebGL ? (
+        <>
+          <div className="app__scene">
+            {/* Styled placeholder, not a blank screen: the shell is readable
+                while the 3D chunk downloads (real art is Phase 2). */}
+            <Suspense
+              fallback={
+                <div className="app__placeholder">
+                  <p className="app__placeholder-name">{content.site.name}</p>
+                  <p className="app__placeholder-role">{content.site.role}</p>
+                  <p className="app__placeholder-note">Setting the desk…</p>
+                </div>
+              }
+            >
+              <Scene spreads={loaded.data.spreads} content={content} />
+            </Suspense>
+          </div>
+          {/* The hint describes book controls, so it exists only with a book. */}
+          <Hint phase={phase} />
+        </>
+      ) : (
+        <NoWebGL site={content.site} contact={content.contact} />
+      )}
     </main>
   )
 }
