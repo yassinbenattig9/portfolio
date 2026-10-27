@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "site": {
+    "name": "Placeholder Name",
+    "role": "Full Stack Developer",
+    "theme": "daylight",
+    "language": "en"
+  },
+  "contact": {
+    "email": "placeholder@example.com",
+    "linkedin": "https://www.linkedin.com/in/placeholder-profile",
+    "github": "https://github.com/placeholder",
+    "cv": "/media/cv.pdf"
+  },
+  "about": {
+    "headline": "Placeholder headline — replace with real content.",
+    "summary": "Placeholder summary — replace with real content. No employer names, client names, real people or real figures are allowed here until they are cleared for publication.",
+    "languages": ["Arabic", "French", "English"]
+  },
+  "projects": [
+    {
+      "id": "project-a",
+      "visible": true,
+      "title": "Placeholder Project A",
+      "period": "20XX — 20XX",
+      "role": "Placeholder role — replace with real content",
+      "summary": "Placeholder project — replace with real content.",
+      "highlights": [
+        "Placeholder highlight — replace with real content",
+        "Placeholder highlight — replace with real content"
+      ],
+      "stack": ["C#", ".NET", "SQL Server"],
+      "links": {
+        "live": null,
+        "repo": null
+      },
+      "left": { "layout": "story" },
+      "right": {
+        "layout": "demo",
+        "demo": {
+          "type": "component",
+          "id": "placeholder-demo-a",
+          "poster": "/media/project-a/poster.webp"
+        }
+      }
+    },
+    {
+      "id": "project-b",
+      "visible": true,
+      "title": "Placeholder Project B",
+      "period": "20XX — 20XX",
+      "role": "Placeholder role — replace with real content",
+      "summary": "Placeholder project — replace with real content.",
+      "highlights": [
+        "Placeholder highlight — replace with real content",
+        "Placeholder highlight — replace with real content"
+      ],
+      "stack": ["React", "Node.js", "PostgreSQL"],
+      "links": {
+        "live": null,
+        "repo": null
+      },
+      "left": { "layout": "story" },
+      "right": {
+        "layout": "demo",
+        "demo": {
+          "type": "media",
+          "src": "/media/project-b/loop.mp4",
+          "poster": "/media/project-b/poster.webp"
+        }
+      }
+    },
+    {
+      "id": "project-c",
+      "visible": true,
+      "title": "Placeholder Project C",
+      "period": "20XX — 20XX",
+      "role": "Placeholder role — replace with real content",
+      "summary": "Placeholder project — replace with real content.",
+      "highlights": [
+        "Placeholder highlight — replace with real content",
+        "Placeholder highlight — replace with real content"
+      ],
+      "stack": ["Flutter", "Dart", "REST"],
+      "links": {
+        "live": null,
+        "repo": null
+      },
+      "left": { "layout": "story" },
+      "right": {
+        "layout": "demo",
+        "demo": {
+          "type": "media",
+          "src": "/media/project-c/loop.mp4",
+          "poster": "/media/project-c/poster.webp"
+        }
+      }
+    }
+  ]
+}
