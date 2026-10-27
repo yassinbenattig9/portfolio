@@ -6,7 +6,7 @@ import { progressAt } from '../state/timing'
 import type { PageText } from './Page'
 import { BONE_COUNT, writeCurlPose, type MutableCurlPose } from './curl/curlPose'
 import { PageMesh, type PageFace, type PageMeshRig } from './curl/PageMesh'
-import { restFaces, turnFaces, type PageRef } from './turnFaces'
+import { restFaces, turnFaces, type PageRef } from '../book/turnFaces'
 
 /**
  * The turning sheet and its animation.

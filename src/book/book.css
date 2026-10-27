@@ -1,0 +1,406 @@
+/* ------------------------------------------------------------------ */
+/* The CSS-3D stage and book                                          */
+/*                                                                    */
+/* 3D rules that every later task must keep:                          */
+/* - `.book`, `.book__page` and the cover are `preserve-3d`;          */
+/* - depth is `translateZ` only, never `z-index`;                     */
+/* - nothing on the book or a page ancestor may set `overflow`,        */
+/*   `clip-path`, `filter`, `opacity < 1`, `mask` or `mix-blend-mode`  */
+/*   (each of those flattens the 3D context). Clipping, if it is ever  */
+/*   needed, belongs on a leaf child.                                 */
+/* ------------------------------------------------------------------ */
+
+.app__scene {
+  position: absolute;
+  inset: 0;
+  /* The camera replacement: one perspective for the whole stage. */
+  perspective: 1600px;
+  perspective-origin: 50% 42%;
+  /* Minimal desk placeholder: a solid surface only. The real desk is later. */
+  background: var(--color-ink);
+}
+
+.book {
+  /* One page is 15 x 21 units, so the open book is 10:7. The width is capped
+     by both viewport axes so the book never leaves the stage. */
+  --book-w: min(90vw, calc(64vh * 10 / 7), 58rem);
+
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--book-w);
+  aspect-ratio: 10 / 7;
+  transform-style: preserve-3d;
+
+  /* Closed the cover sits over the right half, so the whole book is nudged
+     right by half a page; open, it is centred on the spread. */
+  transform:
+    translate(-50%, -50%)
+    translateX(calc((1 - var(--open, 0)) * 25%))
+    rotateX(calc(55deg - 40deg * var(--open, 0)))
+    scale(calc(0.66 + 0.3 * var(--open, 0)));
+
+  /* Nothing here moves at rest, but every frame of a transition rewrites the
+     transform through `--open`, so keep it on its own layer. */
+  will-change: transform;
+
+  /* Type scale is tied to the book width, not the viewport: a page is half a
+     book wide at every size. */
+  --page-pad-y: clamp(0.55rem, calc(var(--book-w) * 0.032), 1.6rem);
+  --page-pad-x: clamp(0.55rem, calc(var(--book-w) * 0.035), 1.7rem);
+  --page-font: clamp(0.58rem, calc(var(--book-w) * 0.028), 0.98rem);
+  --page-small: clamp(0.52rem, calc(var(--book-w) * 0.023), 0.82rem);
+  --page-title: clamp(0.95rem, calc(var(--book-w) * 0.042), 1.9rem);
+}
+
+/* The programmatic focus target (opening/closing moves focus here). It is a
+   container, not a control, so it does not need a ring. */
+.book:focus {
+  outline: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* Boards                                                             */
+/* ------------------------------------------------------------------ */
+
+/* Both boards are full width and scaled from the spine edge, so the closed
+   book is exactly one page wide instead of poking out under the cover. */
+.book__board,
+.book__block {
+  position: absolute;
+  transform-origin: 100% 50%;
+  transform: translateZ(-20px) scaleX(calc(0.5 + 0.5 * var(--open, 0)));
+}
+
+.book__board {
+  inset: -0.8% -0.5% -1.6%;
+  border-radius: 6px;
+  background: var(--color-oak);
+  box-shadow: 0 1.4rem 3rem rgb(0 0 0 / 45%);
+}
+
+.book__block {
+  inset: 1.1% 0.7% 1.5%;
+  border-radius: 3px;
+  background: #d8ddd8;
+  box-shadow: inset 0 0 0 1px rgb(21 32 45 / 8%);
+  transform: translateZ(-12px) scaleX(calc(0.5 + 0.5 * var(--open, 0)));
+}
+
+/* ------------------------------------------------------------------ */
+/* Static pages                                                       */
+/* ------------------------------------------------------------------ */
+
+.book__page {
+  position: absolute;
+  top: 0.8%;
+  bottom: 1.3%;
+  width: 50%;
+  padding: var(--page-pad-y) var(--page-pad-x);
+  border-radius: 3px;
+  background-color: var(--color-limewash);
+  color: var(--color-ink);
+  box-shadow: 0 0.7rem 1.8rem rgb(0 0 0 / 22%);
+  transform-style: preserve-3d;
+}
+
+.book__page--left {
+  left: 0;
+  border-radius: 4px 0 0 4px;
+  transform-origin: right center;
+  background-image: linear-gradient(
+    to right,
+    rgb(21 32 45 / 0%) 72%,
+    rgb(21 32 45 / 9%) 100%
+  );
+}
+
+.book__page--right {
+  left: 50%;
+  border-radius: 0 4px 4px 0;
+  transform-origin: left center;
+  background-image: linear-gradient(
+    to right,
+    rgb(21 32 45 / 9%) 0%,
+    rgb(21 32 45 / 0%) 28%
+  );
+}
+
+/* A closed book has no left page yet: that sheet only exists once the cover
+   has lifted. `visibility` (not opacity) keeps the 3D context intact. */
+.book[data-phase='CLOSED'] .book__page--left {
+  visibility: hidden;
+}
+
+/* ------------------------------------------------------------------ */
+/* Page typography                                                    */
+/* ------------------------------------------------------------------ */
+
+.page__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45em;
+  height: 100%;
+}
+
+.page__eyebrow {
+  margin: 0;
+  color: rgb(21 32 45 / 68%);
+  font-size: var(--page-small);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.page__eyebrow--section {
+  margin-top: auto;
+}
+
+.page__title {
+  margin: 0;
+  font-size: var(--page-title);
+  font-weight: 600;
+  line-height: 1.12;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.page__meta {
+  margin: 0;
+  color: rgb(21 32 45 / 74%);
+  font-size: var(--page-small);
+  line-height: 1.35;
+  text-wrap: pretty;
+}
+
+.page__text {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+  font-size: var(--page-font);
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.page__stack {
+  margin: 0;
+  color: rgb(21 32 45 / 74%);
+  font-size: var(--page-small);
+  letter-spacing: 0.02em;
+}
+
+.page__list {
+  margin: 0;
+  padding-left: 1.1em;
+  font-size: var(--page-small);
+  line-height: 1.5;
+}
+
+.page__links,
+.page__links-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2em 0.9em;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--page-small);
+}
+
+.page__links {
+  flex-direction: column;
+  margin-top: auto;
+}
+
+/* Door blue on limewash is ~7:1; the underline means colour is never the only
+   cue. The ring is re-coloured so it stays visible on paper. */
+.page__link {
+  color: var(--color-door-blue);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+
+.page__link:hover {
+  color: var(--color-ink);
+}
+
+.page__link:focus-visible {
+  outline-color: var(--color-door-blue);
+}
+
+/* Contents: a reading list, not a control yet (page turns are a later task). */
+.page__contents {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45em;
+  margin: 0.2em 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.page__contents-item {
+  display: flex;
+  gap: 0.7em;
+  align-items: baseline;
+  font-size: var(--page-font);
+  line-height: 1.25;
+}
+
+.page__contents-index {
+  color: rgb(21 32 45 / 60%);
+  font-size: var(--page-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.page__contents-title {
+  font-weight: 600;
+}
+
+/* Demo placeholder: paper, a brass keyline and a label. No image, no video. */
+.page__demo {
+  display: grid;
+  place-items: center;
+  height: 38%;
+  border: 1px dashed rgb(188 148 64 / 75%);
+  border-radius: 2px;
+  background: rgb(188 148 64 / 8%);
+}
+
+.page__demo-label {
+  color: rgb(21 32 45 / 62%);
+  font-size: var(--page-small);
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+/* ------------------------------------------------------------------ */
+/* Cover                                                              */
+/* ------------------------------------------------------------------ */
+
+/* Hinged on the spine edge. The lift starts above the right page and ends
+   below the left page, so the cover never z-fights a sheet at either end. */
+.book__cover {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 50%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  transform-style: preserve-3d;
+  transform-origin: left center;
+  transform: translateZ(calc((1 - 2 * var(--open, 0)) * 8px)) rotateY(calc(-180deg * var(--open, 0) * var(--book-motion, 1)));
+}
+
+.book__cover[data-cover='open'] {
+  cursor: default;
+}
+
+.book__cover-face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(0.2rem, calc(var(--book-w) * 0.008), 0.6rem);
+  padding: var(--page-pad-y) var(--page-pad-x);
+  border-radius: 4px;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.book__cover-face--front {
+  border: 1px solid var(--color-brass);
+  background: var(--color-door-blue);
+  color: var(--color-limewash);
+  transform: translateZ(0.6px);
+  transition: background var(--chrome-transition-duration) ease;
+}
+
+.book__cover[data-cover='closed']:hover .book__cover-face--front,
+.book__cover[data-cover='closed']:focus-visible .book__cover-face--front {
+  background: color-mix(in srgb, var(--color-door-blue) 86%, var(--color-limewash));
+}
+
+/* Inside of the cover: limewash endpaper with a brass keyline. */
+.book__cover-face--back {
+  border: 1px solid var(--color-brass);
+  background: var(--color-limewash);
+  color: rgb(21 32 45 / 58%);
+  transform: rotateY(180deg) translateZ(0.6px);
+}
+
+.book__cover-face--front::before {
+  position: absolute;
+  inset: clamp(0.4rem, calc(var(--book-w) * 0.014), 0.9rem);
+  border: 1px solid rgb(233 237 234 / 45%);
+  border-radius: 2px;
+  content: '';
+}
+
+.book__cover[data-cover='closed']:focus-visible {
+  outline-color: var(--color-brass);
+  outline-offset: 5px;
+}
+
+.book__cover-name {
+  position: relative;
+  font-size: clamp(1.05rem, calc(var(--book-w) * 0.055), 2.3rem);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: 0.01em;
+  text-align: center;
+  text-wrap: balance;
+}
+
+.book__cover-role {
+  position: relative;
+  color: rgb(233 237 234 / 88%);
+  font-size: var(--page-small);
+  letter-spacing: 0.06em;
+  text-align: center;
+}
+
+.book__cover-action {
+  position: relative;
+  margin-top: clamp(0.35rem, calc(var(--book-w) * 0.016), 1.1rem);
+  padding-top: clamp(0.3rem, calc(var(--book-w) * 0.012), 0.8rem);
+  border-top: 1px solid rgb(188 148 64 / 70%);
+  color: var(--color-limewash);
+  font-size: var(--page-small);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.book__cover-back-title {
+  font-size: var(--page-small);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+/* ------------------------------------------------------------------ */
+/* Reduced motion                                                     */
+/* ------------------------------------------------------------------ */
+
+/* The rAF loop also finishes instantly (`motionScale` in `BookStage`); as a
+   belt-and-braces, the cover is simply not shown once the book is open. */
+@media (prefers-reduced-motion: reduce) {
+  .book[data-phase='OPEN'] .book__cover,
+  .book[data-phase='TURNING'] .book__cover {
+    visibility: hidden;
+  }
+}

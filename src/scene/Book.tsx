@@ -5,7 +5,7 @@ import type { Spread } from '../content/deriveSpreads'
 import { getFreeze } from '../dev/freeze'
 import { assertInvariants, getBookState, useBookStore } from '../state/bookState'
 import { easeInOutCubic, progressAt } from '../state/timing'
-import { opennessFor } from './bookPose'
+import { opennessFor } from '../book/bookPose'
 import { Page, PAGE_HEIGHT, PAGE_WIDTH, type PageText } from './Page'
 import { TurnLayer, type TurnSheet } from './TurnLayer'
 
