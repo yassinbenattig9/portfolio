@@ -6,6 +6,7 @@ import { progressAt } from '../state/timing'
 import type { PageText } from './Page'
 import { BONE_COUNT, writeCurlPose, type MutableCurlPose } from './curl/curlPose'
 import { PageMesh, type PageFace, type PageMeshRig } from './curl/PageMesh'
+import { restFaces, turnFaces, type PageRef } from './turnFaces'
 
 /**
  * The turning sheet and its animation.
@@ -22,6 +23,9 @@ import { PageMesh, type PageFace, type PageMeshRig } from './curl/PageMesh'
  * and its verso is the page it lies face-up on at curl 1 (the left page it
  * lands on, or the one it starts from). Each static page therefore only changes
  * while the sheet covers it, so no sheet is ever seen to swap content.
+ *
+ * `turnFaces` encodes this table: the mapping itself is written down only once,
+ * in `turnFaces.ts`, and this table and that function must stay in step.
  *
  * Geometry: the rig is built as a right-hand sheet hinged on the spine, and its
  * root is only ever rotated the positive way (curl `dir = +1`), because a
@@ -58,15 +62,16 @@ export interface TurnLayerProps {
 }
 
 function faceFor(
-  spread: Spread | undefined,
-  side: 'left' | 'right',
+  spreads: readonly Spread[],
+  ref: PageRef,
   pageText: ReadonlyMap<string, PageText>,
 ): PageFace | null {
+  const spread = spreads[ref.spread]
   if (spread === undefined) return null
-  const page = side === 'left' ? spread.left : spread.right
+  const page = ref.side === 'left' ? spread.left : spread.right
   const text = pageText.get(page.key)
   if (text === undefined) return null
-  return { side, pageKey: page.key, text }
+  return { side: ref.side, pageKey: page.key, text }
 }
 
 export function TurnLayer({
@@ -90,18 +95,12 @@ export function TurnLayer({
   }, [])
 
   const faces = useMemo<{ front: PageFace; back: PageFace } | null>(() => {
-    const from = sheet === null ? undefined : spreads[sheet.from]
-    const to = sheet === null ? undefined : spreads[sheet.to]
-
     // Flat: keep the rig warm with the two pages that are already on screen.
-    const front =
-      sheet === null
-        ? faceFor(spreads[restIndex], 'right', pageText)
-        : faceFor(sheet.dir === 1 ? from : to, 'right', pageText)
-    const back =
-      sheet === null
-        ? faceFor(spreads[restIndex], 'left', pageText)
-        : faceFor(sheet.dir === 1 ? to : from, 'left', pageText)
+    const slots =
+      sheet === null ? restFaces(restIndex) : turnFaces(sheet.from, sheet.to, sheet.dir)
+
+    const front = faceFor(spreads, slots.recto, pageText)
+    const back = faceFor(spreads, slots.verso, pageText)
 
     if (front === null || back === null) return null
     return { front, back }
