@@ -222,62 +222,6 @@ body {
   pointer-events: none;
 }
 
-/* ------------------------------------------------------------------ */
-/* No-WebGL fallback                                                   */
-/* ------------------------------------------------------------------ */
-
-.nowebgl {
-  position: absolute;
-  inset: 0;
-  overflow: auto;
-  padding: calc(var(--topbar-height) + var(--chrome-gap)) var(--chrome-padding-inline)
-    clamp(2rem, calc(8vh), 4rem);
-}
-
-.nowebgl > * {
-  max-width: 34rem;
-  margin-inline: auto;
-}
-
-.nowebgl__eyebrow {
-  margin: 0 0 0.25rem;
-  color: var(--color-brass);
-  font-size: var(--hint-font-size);
-  letter-spacing: 0.04em;
-}
-
-.nowebgl__name {
-  margin: 0;
-  color: var(--color-limewash);
-  font-size: clamp(1.4rem, calc(3vw + 0.8vh), 2.25rem);
-  font-weight: 600;
-  letter-spacing: 0.01em;
-}
-
-.nowebgl__role {
-  margin: 0.15rem 0 0;
-  color: var(--color-limewash);
-  font-size: var(--chrome-font-size);
-}
-
-.nowebgl__message,
-.nowebgl__note {
-  margin: 1rem 0 0;
-  color: rgb(233 237 234 / 82%);
-  font-size: var(--chrome-font-size);
-  line-height: 1.55;
-  text-wrap: pretty;
-}
-
-.nowebgl__links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem 1.5rem;
-  margin: 1.25rem 0 0;
-  padding: 0;
-  list-style: none;
-}
-
 .visually-hidden {
   position: absolute;
   width: 1px;

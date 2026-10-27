@@ -1,18 +1,23 @@
 import type { About, Contact, Project, Site } from '../content/schema'
 import type { ContentsEntry, Page } from '../content/deriveSpreads'
 import { PageContent } from './PageContent'
-import type { PageSide } from './pageLookup'
+import type { PageLookup, PageSide } from './pageLookup'
 
 /**
- * One static page of the spread: the paper surface plus its position.
+ * The paper of the book, in both layouts.
  *
- * The wrapper is a 3D plane hinged on the spine (`transform-origin` on the
- * inner edge in `book.css`), so the future turning sheet can be authored in
- * the same space without mirroring the static pages.
+ * `StaticPage` is one page of the open spread: a 3D plane hinged on the spine
+ * (the hinge lives in `book.css`), so the future turning sheet can be authored
+ * in the same space without mirroring the static pages.
  *
- * While the book is closed both pages carry `inert` and `aria-hidden`: the
- * cover button and the chrome are the only reachable things, and screen
- * readers are not offered page text that is physically under the cover.
+ * `SinglePage` is the whole page on a narrow screen (plan §5.5): one page at a
+ * time, full width. A page change fades the incoming page in over the outgoing
+ * one; the outgoing page is presentation only (`variant="sheet"`: no ids, no
+ * links, no tab stops) and is inert, so only the visible page is reachable.
+ *
+ * While the book is closed both carry `inert` and `aria-hidden`: the cover
+ * button and the chrome are the only reachable things, and screen readers are
+ * not offered page text that is physically under the cover.
  */
 
 export interface StaticPageProps {
@@ -22,6 +27,14 @@ export interface StaticPageProps {
   /** Slot identity (`"<spread>.<side>"`), used to park focus for a turn. */
   readonly slot: string
   readonly inert: boolean
+  readonly contents?: readonly ContentsEntry[]
+  readonly about?: About
+  readonly contact?: Contact
+  readonly site?: Site
+}
+
+/** Page data every page renderer needs; kept in one shape for both layouts. */
+export interface PageDataProps {
   readonly contents?: readonly ContentsEntry[]
   readonly about?: About
   readonly contact?: Contact
@@ -57,6 +70,74 @@ export function StaticPage({
         contact={contact}
         site={site}
       />
+    </div>
+  )
+}
+
+export interface SinglePageProps extends PageDataProps {
+  /** The page being read. Its heading is the focus landing point. */
+  readonly current: PageLookup
+  /** The page being crossfaded away from, or `null` at rest. */
+  readonly previous: PageLookup | null
+  readonly inert: boolean
+  /** Called when the incoming page's fade has finished, to drop `previous`. */
+  readonly onSettled?: () => void
+}
+
+export function SinglePage({
+  current,
+  previous,
+  inert,
+  onSettled,
+  contents,
+  about,
+  contact,
+  site,
+}: SinglePageProps) {
+  return (
+    <div
+      className="book__page book__page--single"
+      data-page={current.page.key}
+      data-slot={current.key}
+      inert={inert}
+      aria-hidden={inert ? true : undefined}
+    >
+      {previous === null ? null : (
+        <div className="page__layer page__layer--outgoing" aria-hidden="true" inert>
+          <PageContent
+            page={previous.page}
+            project={previous.project}
+            side={previous.side}
+            variant="sheet"
+            contents={contents}
+            about={about}
+            contact={contact}
+            site={site}
+          />
+        </div>
+      )}
+
+      <div
+        className="page__layer page__layer--current"
+        key={current.key}
+        onAnimationEnd={(event) => {
+          // Bubbling child animations (none today) must not end the fade early.
+          if (event.target !== event.currentTarget) return
+          if (event.animationName !== 'page-in') return
+          onSettled?.()
+        }}
+      >
+        <PageContent
+          page={current.page}
+          project={current.project}
+          side={current.side}
+          variant="page"
+          contents={contents}
+          about={about}
+          contact={contact}
+          site={site}
+        />
+      </div>
     </div>
   )
 }

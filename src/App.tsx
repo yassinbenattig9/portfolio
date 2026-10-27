@@ -1,8 +1,9 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { BookStage } from './book/BookStage'
 import { deriveSpreads, type Spread } from './content/deriveSpreads'
 import { loadContent } from './content/loadContent'
 import type { Portfolio } from './content/schema'
+import { isPerfEnabled, PerfOverlay } from './dev/PerfOverlay'
 import { getBookState, useBookStore } from './state/bookState'
 import { Hint } from './ui/Hint'
 import { TopBar } from './ui/TopBar'
@@ -18,8 +19,7 @@ const EMPTY_SPREADS: readonly Spread[] = []
  * The shell: content loading, the keyboard map and the 2D chrome.
  *
  * The book itself is plain DOM (`src/book`), so it mounts directly: no lazy
- * chunk, no Suspense boundary and no WebGL probe. `src/scene` is still on disk
- * until the R3F cleanup task, but nothing here imports it any more.
+ * chunk, no Suspense boundary and no renderer probe.
  */
 function App() {
   const loaded = useMemo<{ data: LoadedContent | null; error: string | null }>(() => {
@@ -36,6 +36,9 @@ function App() {
   const phase = useBookStore((state) => state.phase)
   const setSpreadCount = useBookStore((state) => state.setSpreadCount)
   const spreads = loaded.data?.spreads ?? EMPTY_SPREADS
+  // `?perf` is a dev instrument: without the flag nothing is mounted and the
+  // frame loop is untouched.
+  const [perfEnabled] = useState<boolean>(isPerfEnabled)
 
   useEffect(() => {
     setSpreadCount(spreads.length)
@@ -117,6 +120,8 @@ function App() {
 
       {/* The hint describes book controls, so it exists only with a book. */}
       <Hint phase={phase} />
+
+      {perfEnabled ? <PerfOverlay /> : null}
     </main>
   )
 }

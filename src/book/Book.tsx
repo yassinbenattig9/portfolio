@@ -5,7 +5,7 @@ import { getFreeze } from '../dev/freeze'
 import { useBookStore, type TurnDir } from '../state/bookState'
 import { pageFor, projectMap, type PageLookup } from './pageLookup'
 import { frozenSheet } from './sheetPose'
-import { StaticPage } from './StaticPage'
+import { SinglePage, StaticPage } from './StaticPage'
 import { TurningSheet } from './TurningSheet'
 import { turnFaces, type TurnFaces } from './turnFaces'
 
@@ -34,6 +34,18 @@ export interface BookProps {
   readonly content: Portfolio
   /** The turn loop writes `--t` here; the sheet itself never animates. */
   readonly sheetRef?: RefObject<HTMLDivElement | null>
+  /**
+   * `spread` (default) shows the open pair and the turning sheet. `single`
+   * (narrow screens) shows one page and no sheet: the crossfade replaces the
+   * turn, and the store is not asked for faces.
+   */
+  readonly layout?: 'spread' | 'single'
+  /** The page to show in `single` layout. */
+  readonly single?: PageLookup | null
+  /** The page crossfading out in `single` layout, if any. */
+  readonly previous?: PageLookup | null
+  /** Fired when a single-page crossfade has finished. */
+  readonly onSettled?: () => void
 }
 
 interface CoverProps {
@@ -100,7 +112,15 @@ function Cover({ closed, site, onOpen }: CoverProps) {
   )
 }
 
-export function Book({ spreads, content, sheetRef }: BookProps) {
+export function Book({
+  spreads,
+  content,
+  sheetRef,
+  layout = 'spread',
+  single = null,
+  previous = null,
+  onSettled,
+}: BookProps) {
   const phase = useBookStore((state) => state.phase)
   const spreadIndex = useBookStore((state) => state.spread)
   const turn = useBookStore((state) => state.turn)
@@ -149,40 +169,56 @@ export function Book({ spreads, content, sheetRef }: BookProps) {
       <div className="book__board" aria-hidden="true" />
       <div className="book__block" aria-hidden="true" />
 
-      {left === null ? null : (
-        <StaticPage
-          key={left.key}
-          slot={left.key}
-          page={left.page}
-          project={left.project}
-          side="left"
-          {...pageProps}
-        />
-      )}
+      {layout === 'single' ? (
+        // One page, full width, no sheet: the crossfade is the turn here.
+        // Everything below (left/right faces, the sheet) is spread geometry.
+        single === null ? null : (
+          <SinglePage
+            current={single}
+            previous={previous}
+            inert={closed}
+            onSettled={onSettled}
+            {...pageData}
+          />
+        )
+      ) : (
+        <>
+          {left === null ? null : (
+            <StaticPage
+              key={left.key}
+              slot={left.key}
+              page={left.page}
+              project={left.project}
+              side="left"
+              {...pageProps}
+            />
+          )}
 
-      {right === null ? null : (
-        <StaticPage
-          key={right.key}
-          slot={right.key}
-          page={right.page}
-          project={right.project}
-          side="right"
-          {...pageProps}
-        />
-      )}
+          {right === null ? null : (
+            <StaticPage
+              key={right.key}
+              slot={right.key}
+              page={right.page}
+              project={right.project}
+              side="right"
+              {...pageProps}
+            />
+          )}
 
-      {sheet === null ? null : (
-        <TurningSheet
-          key={sheetKey}
-          recto={sheet.recto}
-          verso={sheet.verso}
-          staticLeft={sheet.staticLeft}
-          staticRight={sheet.staticRight}
-          dir={dir}
-          turn={pinned}
-          sheetRef={sheetRef}
-          {...pageData}
-        />
+          {sheet === null ? null : (
+            <TurningSheet
+              key={sheetKey}
+              recto={sheet.recto}
+              verso={sheet.verso}
+              staticLeft={sheet.staticLeft}
+              staticRight={sheet.staticRight}
+              dir={dir}
+              turn={pinned}
+              sheetRef={sheetRef}
+              {...pageData}
+            />
+          )}
+        </>
       )}
 
       <Cover closed={closed} site={content.site} onOpen={openBook} />

@@ -1,19 +1,20 @@
 /**
  * Frame-time harness: `?perf` mounts this panel (and nothing else changes).
  *
- * Phase 1 acceptance is stated in frame times, not fps: p95 <= 16.7 ms and no
- * frame > 33 ms (plan §7.7). A display refresh count would inflate the result on
- * a 120 Hz screen, so this measures the interval between *rendered* frames — the
- * thing a stutter actually breaks — and reports percentiles plus the worst frame.
+ * There is no renderer to ask any more: the book is DOM and CSS, so the panel
+ * measures the document itself. Frame intervals come from
+ * `requestAnimationFrame` timestamps, with `performance.now()` deltas recorded
+ * on the same frames as a cross-check on pacing. Long tasks and layout shifts
+ * come from `PerformanceObserver`; when a browser does not support an entry
+ * type the panel says `n/a` instead of pretending the metric passed.
  *
- * The panel is mounted outside `<Canvas>`, where `useFrame` has no store, so it
- * taps R3F's global `addAfterEffect`, which fires once per frame after
- * `gl.render` (the published, typed equivalent of the end of a `useFrame` pass).
- * Deltas come from the rAF timestamp; `performance.now()` deltas are recorded in
- * parallel as a cross-check on frame pacing.
+ * The pass bar for a turn is: no long task > 50 ms, CLS < 0.02, zero frames
+ * > 33 ms. All three are shown as their own line, and the headline verdict only
+ * says PASS when all three were actually measured.
  *
- * Nothing is interactive: the numbers must survive a screenshot. `R` clears the
- * samples and starts a fresh 10 s window (3 s warm-up first).
+ * Nothing is interactive: the numbers must survive a screenshot. `R` clears
+ * everything and starts a fresh 10 s window after a 3 s warm-up. DOM writes are
+ * capped at 4×/s through a ref; no frame ever touches React state.
  */
 
 import { useEffect, useRef } from 'react'
@@ -27,6 +28,11 @@ const PAINT_MS = 250
 const SUSPEND_MS = 1000
 const BUDGET_P95_MS = 16.7
 const BUDGET_MAX_MS = 33
+const BUDGET_OVER20_MS = 20
+const BUDGET_LONG_TASK_MS = 50
+const BUDGET_CLS = 0.02
+/** Observer entries keep arriving while the frozen report stays on screen. */
+const MAX_ENTRIES = 500
 
 const PANEL_STYLE: CSSProperties = {
   position: 'fixed',
@@ -49,13 +55,21 @@ const PANEL_STYLE: CSSProperties = {
 }
 
 const TITLE_STYLE: CSSProperties = { color: 'var(--color-brass, #bc9440)' }
+const RULE_STYLE: CSSProperties = {
+  margin: '0.2rem 0',
+  borderTop: '1px solid rgba(188, 148, 64, 0.35)',
+}
 const HINT_STYLE: CSSProperties = { marginTop: '0.3rem', opacity: 0.72 }
 const TEXT_STYLE: CSSProperties = { margin: '0.15rem 0 0', font: 'inherit' }
 
-interface Peaks {
-  calls: number
-  triangles: number
-  programs: number
+interface TimedTask {
+  readonly at: number
+  readonly duration: number
+}
+
+interface ObservedShift {
+  readonly at: number
+  readonly value: number
 }
 
 interface Summary {
@@ -71,7 +85,12 @@ interface Summary {
   /** Median warm-up interval: the display's nominal refresh, for context. */
   readonly refresh: number
   readonly suspended: number
-  readonly peaks: Peaks
+  readonly longTasks: number
+  readonly longTasksSupported: boolean
+  readonly cls: number
+  readonly clsSupported: boolean
+  /** `document.querySelectorAll('*').length` when the window ends. */
+  readonly elements: number
 }
 
 interface Recorder {
@@ -83,14 +102,21 @@ interface Recorder {
   frames: number[]
   /** `performance.now()` deltas, same frames, cross-check only. */
   nows: number[]
-  /** First ~4 s of deltas (before the window), used for the refresh estimate. */
+  /** Warm-up deltas, used for the refresh estimate. */
   warmDeltas: number[]
+  longTasks: TimedTask[]
+  shifts: ObservedShift[]
   suspended: number
-  peaks: Peaks
+  longTasksSupported: boolean
+  clsSupported: boolean
   summary: Summary | null
 }
 
-type Fiber = typeof import('@react-three/fiber')
+/** `layout-shift` fields that are not part of the DOM lib's PerformanceEntry. */
+interface LayoutShiftLike extends PerformanceEntry {
+  readonly hadRecentInput?: boolean
+  readonly value?: number
+}
 
 function isPerfEnabled(): boolean {
   return typeof location !== 'undefined' && new URLSearchParams(location.search).has('perf')
@@ -105,8 +131,11 @@ function createRecorder(): Recorder {
     frames: [],
     nows: [],
     warmDeltas: [],
+    longTasks: [],
+    shifts: [],
     suspended: 0,
-    peaks: { calls: 0, triangles: 0, programs: 0 },
+    longTasksSupported: false,
+    clsSupported: false,
     summary: null,
   }
 }
@@ -116,8 +145,9 @@ function resetRecorder(recorder: Recorder): void {
   recorder.frames.length = 0
   recorder.nows.length = 0
   recorder.warmDeltas.length = 0
+  recorder.longTasks.length = 0
+  recorder.shifts.length = 0
   recorder.suspended = 0
-  recorder.peaks = { calls: 0, triangles: 0, programs: 0 }
   recorder.summary = null
 }
 
@@ -131,22 +161,34 @@ function median(values: readonly number[]): number {
   return percentile([...values].sort((a, b) => a - b), 0.5)
 }
 
-function summarize(recorder: Recorder): Summary {
-  const frames = [...recorder.frames].sort((a, b) => a - b)
+function sum(values: readonly number[]): number {
   let total = 0
+  for (const value of values) total += value
+  return total
+}
+
+function windowBounds(recorder: Recorder): { readonly start: number; readonly end: number } {
+  const start = (recorder.startedAt ?? 0) + WARMUP_MS
+  return { start, end: start + WINDOW_MS }
+}
+
+function summarize(recorder: Recorder): Summary {
+  const { start, end } = windowBounds(recorder)
+  const frames = [...recorder.frames].sort((a, b) => a - b)
   let max = 0
   let over20 = 0
   let over33 = 0
   for (const frame of frames) {
-    total += frame
     if (frame > max) max = frame
-    if (frame > 20) over20 += 1
+    if (frame > BUDGET_OVER20_MS) over20 += 1
     if (frame > BUDGET_MAX_MS) over33 += 1
   }
   const n = frames.length
+  const inWindow = (at: number): boolean => at >= start && at < end
+
   return {
     n,
-    avg: n === 0 ? 0 : total / n,
+    avg: n === 0 ? 0 : sum(frames) / n,
     p50: percentile(frames, 0.5),
     p95: percentile(frames, 0.95),
     p99: percentile(frames, 0.99),
@@ -156,25 +198,74 @@ function summarize(recorder: Recorder): Summary {
     crossP95: percentile([...recorder.nows].sort((a, b) => a - b), 0.95),
     refresh: median(recorder.warmDeltas),
     suspended: recorder.suspended,
-    peaks: recorder.peaks,
+    longTasks: recorder.longTasks.filter((task) => inWindow(task.at)).length,
+    longTasksSupported: recorder.longTasksSupported,
+    cls: sum(recorder.shifts.filter((shift) => inWindow(shift.at)).map((shift) => shift.value)),
+    clsSupported: recorder.clsSupported,
+    elements: document.querySelectorAll('*').length,
   }
 }
 
 const ms = (value: number): string => value.toFixed(1)
 
+/** `ok`, `FAIL`, or `n/a` when the browser could not measure the metric. */
+function marker(pass: boolean | null): string {
+  if (pass === null) return 'n/a'
+  return pass ? 'ok' : 'FAIL'
+}
+
 function report(summary: Summary): string {
-  const pass = summary.p95 <= BUDGET_P95_MS && summary.over33 === 0
+  const frameOk = summary.over33 === 0
+  const longOk = summary.longTasksSupported ? summary.longTasks === 0 : null
+  const clsOk = summary.clsSupported ? summary.cls < BUDGET_CLS : null
+  const complete = longOk !== null && clsOk !== null
+  const pass = frameOk && longOk !== false && clsOk !== false
+  const verdict = !pass ? 'FAIL' : complete ? 'PASS' : 'PARTIAL'
+
   return [
-    `n ${summary.n}  refresh~${ms(summary.refresh)}ms`,
-    `p50 ${ms(summary.p50)}  p95 ${ms(summary.p95)}`,
-    `p99 ${ms(summary.p99)}  max ${ms(summary.max)}`,
-    `avg ${ms(summary.avg)}`,
-    `>20ms ${summary.over20}  >33ms ${summary.over33}`,
-    `xchk p95 ${ms(summary.crossP95)}`,
-    `calls ${summary.peaks.calls}  tris ${summary.peaks.triangles}`,
-    `progs ${summary.peaks.programs}  susp ${summary.suspended}`,
-    `BUDGET ${pass ? 'PASS' : 'FAIL'}`,
+    `TURN BUDGET ${verdict}`,
+    `  frames>33 ${summary.over33} ${marker(frameOk)}`,
+    `  long>50 ${summary.longTasksSupported ? summary.longTasks : 'n/a'} ${marker(longOk)}`,
+    `  CLS ${summary.clsSupported ? summary.cls.toFixed(3) : 'n/a'} ${marker(clsOk)}`,
+    '',
+    `n ${summary.n}  ${(WINDOW_MS / 1000).toFixed(1)}s  refresh~${ms(summary.refresh)}ms`,
+    `p50 ${ms(summary.p50)}  p95 ${ms(summary.p95)}  p99 ${ms(summary.p99)}`,
+    `avg ${ms(summary.avg)}  max ${ms(summary.max)}`,
+    `frames >20 ${summary.over20}  >33 ${summary.over33}`,
+    `p95<=${ms(BUDGET_P95_MS)} ${marker(summary.p95 <= BUDGET_P95_MS)}  xchk ${ms(summary.crossP95)}`,
+    `elements ${summary.elements}  susp ${summary.suspended}`,
   ].join('\n')
+}
+
+/**
+ * Start a `PerformanceObserver` for one entry type. Returns `null` when the
+ * type is unsupported or the constructor throws (locked-down browsers), so the
+ * caller can report `n/a` rather than a fabricated zero.
+ */
+function observe(
+  type: string,
+  onEntry: (entry: PerformanceEntry) => void,
+): PerformanceObserver | null {
+  if (typeof PerformanceObserver === 'undefined') return null
+  const supported = PerformanceObserver.supportedEntryTypes
+  if (supported === undefined || !supported.includes(type)) return null
+
+  try {
+    const observer = new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) onEntry(entry)
+    })
+    observer.observe({ type, buffered: true })
+    return observer
+  } catch {
+    return null
+  }
+}
+
+function layoutShiftOf(entry: PerformanceEntry): ObservedShift | null {
+  const shift = entry as LayoutShiftLike
+  if (shift.hadRecentInput === true) return null
+  if (typeof shift.value !== 'number' || !Number.isFinite(shift.value)) return null
+  return { at: entry.startTime, value: shift.value }
 }
 
 export function PerfOverlay() {
@@ -185,28 +276,50 @@ export function PerfOverlay() {
     if (text === null) return
 
     const recorder = createRecorder()
-    let fiber: Fiber | null = null
-    let stopped = false
-    let stopFrame: (() => void) | null = null
-
-    // Read the just-rendered frame's counts at most 4×/s. `info.autoReset`
-    // clears them each render, so these are per-frame numbers, not totals.
-    const samplePeaks = (): void => {
-      if (fiber === null) return
-      const root = fiber._roots.values().next()
-      if (root.done) return
-      const info = root.value.store.getState().gl.info
-      const peaks = recorder.peaks
-      peaks.calls = Math.max(peaks.calls, info.render.calls)
-      peaks.triangles = Math.max(peaks.triangles, info.render.triangles)
-      peaks.programs = Math.max(peaks.programs, info.programs?.length ?? 0)
-    }
+    let frameId: number | null = null
+    let running = false
 
     const write = (value: string): void => {
       text.textContent = value
     }
 
+    const longTaskObserver = observe('longtask', (entry) => {
+      if (entry.duration < BUDGET_LONG_TASK_MS) return
+      if (recorder.longTasks.length >= MAX_ENTRIES) return
+      recorder.longTasks.push({ at: entry.startTime, duration: entry.duration })
+    })
+    recorder.longTasksSupported = longTaskObserver !== null
+
+    const shiftObserver = observe('layout-shift', (entry) => {
+      if (recorder.shifts.length >= MAX_ENTRIES) return
+      const shift = layoutShiftOf(entry)
+      if (shift !== null) recorder.shifts.push(shift)
+    })
+    recorder.clsSupported = shiftObserver !== null
+
+    const stopLoop = (): void => {
+      running = false
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId)
+        frameId = null
+      }
+    }
+
+    const schedule = (): void => {
+      if (running) frameId = requestAnimationFrame(onFrame)
+    }
+
+    const finish = (): void => {
+      running = false
+      frameId = null
+      const summary = summarize(recorder)
+      recorder.summary = summary
+      write(report(summary))
+    }
+
     const onFrame = (timestamp: number): void => {
+      frameId = null
+      if (!running) return
       const now = performance.now()
 
       if (recorder.startedAt === null) {
@@ -215,6 +328,7 @@ export function PerfOverlay() {
         recorder.lastNow = now
         recorder.lastPaint = now
         write('warming up 0.0 / 3.0 s')
+        schedule()
         return
       }
 
@@ -228,6 +342,7 @@ export function PerfOverlay() {
       if (stampDelta > SUSPEND_MS) {
         recorder.suspended += 1
         if (recorder.startedAt !== null) recorder.startedAt += stampDelta
+        schedule()
         return
       }
 
@@ -239,6 +354,7 @@ export function PerfOverlay() {
           recorder.lastPaint = now
           write(`warming up ${(elapsed / 1000).toFixed(1)} / 3.0 s`)
         }
+        schedule()
         return
       }
 
@@ -247,17 +363,19 @@ export function PerfOverlay() {
         recorder.nows.push(nowDelta)
         if (now - recorder.lastPaint >= PAINT_MS) {
           recorder.lastPaint = now
-          samplePeaks()
           write(`recording ${(elapsed / 1000).toFixed(1)} / 10.0 s\nn ${recorder.frames.length}`)
         }
+        schedule()
         return
       }
 
-      if (recorder.summary === null) {
-        samplePeaks()
-        recorder.summary = summarize(recorder)
-        write(report(recorder.summary))
-      }
+      finish()
+    }
+
+    const startLoop = (): void => {
+      if (running) return
+      running = true
+      frameId = requestAnimationFrame(onFrame)
     }
 
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -271,37 +389,32 @@ export function PerfOverlay() {
         if (target.closest('[role="button"]') !== null) return
       }
 
+      stopLoop()
       resetRecorder(recorder)
       write('restarting…')
+      startLoop()
     }
 
     window.addEventListener('keydown', onKeyDown)
-
-    // Only `?perf` pays for R3F here; the scene chunk owns the same modules, so
-    // this resolves to what `<Canvas>` already loaded rather than a second copy.
-    void import('@react-three/fiber')
-      .then((module) => {
-        if (stopped) return
-        fiber = module
-        stopFrame = module.addAfterEffect(onFrame)
-      })
-      .catch(() => {
-        if (!stopped) write('frame hook unavailable')
-      })
+    startLoop()
 
     return () => {
-      stopped = true
+      stopLoop()
       window.removeEventListener('keydown', onKeyDown)
-      stopFrame?.()
+      longTaskObserver?.disconnect()
+      shiftObserver?.disconnect()
     }
   }, [])
 
   return (
     <div style={PANEL_STYLE} aria-hidden="true" id="perf-overlay">
       <div style={TITLE_STYLE}>THE LOGBOOK · FRAME TIME</div>
-      <pre ref={textRef} style={TEXT_STYLE} />
+      <pre ref={textRef} style={TEXT_STYLE}>
+        starting…
+      </pre>
+      <div style={RULE_STYLE} />
       <div style={HINT_STYLE}>
-        {'budget p95<=16.7ms, 0 frames>33ms\nR restart  3s warm-up  10s window'}
+        {'budget: 0 frames>33ms, 0 long>50ms, CLS<0.02\nR restart  3s warm-up  10s window'}
       </div>
     </div>
   )

@@ -13,11 +13,15 @@
 .app__scene {
   position: absolute;
   inset: 0;
-  /* The camera replacement: one perspective for the whole stage. */
+  /* The camera replacement: one perspective for the whole stage. The desk
+     itself is a sibling layer (`desk.css`), never an ancestor of `.book`. */
   perspective: 1600px;
   perspective-origin: 50% 42%;
-  /* Minimal desk placeholder: a solid surface only. The real desk is later. */
-  background: var(--color-ink);
+  /* Base colour behind the desk layer, so no first paint flashes dark. */
+  background: #dfe5df;
+  /* Horizontal paging is swipe-driven in single layout; vertical scrolling is
+     still the browser's (there is none, the stage is fixed). */
+  touch-action: pan-y;
 }
 
 .book {
@@ -33,16 +37,19 @@
   transform-style: preserve-3d;
 
   /* Closed the cover sits over the right half, so the whole book is nudged
-     right by half a page; open, it is centred on the spread. */
+     right by half a page; open, it is centred on the spread. The view tilts
+     from the desk (55deg) to a reading pose (15deg) as `--open` goes 0 -> 1:
+     the shallow end pose is what keeps the page text crisp. Scale is the
+     push-in: 0.72 -> 1, so the open book is rasterised at its natural size. */
   transform:
     translate(-50%, -50%)
     translateX(calc((1 - var(--open, 0)) * 25%))
     rotateX(calc(55deg - 40deg * var(--open, 0)))
-    scale(calc(0.66 + 0.3 * var(--open, 0)));
+    scale(calc(0.72 + 0.28 * var(--open, 0)));
 
-  /* Nothing here moves at rest, but every frame of a transition rewrites the
-     transform through `--open`, so keep it on its own layer. */
-  will-change: transform;
+  /* Only the open/close window rewrites the transform each frame. Nothing is
+     promoted at rest, and a page turn never touches this property. */
+  --open: 0;
 
   /* Type scale is tied to the book width, not the viewport: a page is half a
      book wide at every size. */
@@ -51,6 +58,13 @@
   --page-font: clamp(0.58rem, calc(var(--book-w) * 0.028), 0.98rem);
   --page-small: clamp(0.52rem, calc(var(--book-w) * 0.023), 0.82rem);
   --page-title: clamp(0.95rem, calc(var(--book-w) * 0.042), 1.9rem);
+}
+
+/* The open/close window is the only time the book's transform changes. Keeping
+   the hint to those phases means no text-bearing layer is promoted at rest. */
+.book[data-phase='OPENING'],
+.book[data-phase='CLOSING'] {
+  will-change: transform;
 }
 
 /* The programmatic focus target (opening/closing moves focus here). It is a
@@ -85,16 +99,24 @@
 }
 
 /* Contact shadow on the desk. It has no opacity of its own (an alpha gradient
-   instead), so it cannot flatten anything, and it lives below every board. */
+   instead), so it cannot flatten anything, and it lives below every board.
+   Closed, the book is upright on the cover: a tight, dark contact patch. Open,
+   it has settled flat: the patch grows and thins as `--open` goes 0 -> 1, which
+   is the "settle". Growing a soft radial gradient is also how it softens, with
+   no filter and no blur animation. */
 .book__contact {
   position: absolute;
-  right: 4%;
-  bottom: -7%;
-  left: 4%;
-  height: 10%;
+  right: 2.5%;
+  bottom: -8%;
+  left: 2.5%;
+  height: 11%;
   border-radius: 50%;
-  background: radial-gradient(ellipse at center, rgb(0 0 0 / 40%), rgb(0 0 0 / 0%) 70%);
-  transform: translateZ(-24px) scaleX(calc(0.62 + 0.38 * var(--open, 0)));
+  background: radial-gradient(
+    ellipse at center,
+    rgb(21 32 45 / calc(46% - 15% * var(--open, 0))) 0%,
+    rgb(21 32 45 / 0%) 72%
+  );
+  transform: translateZ(-24px) scale(calc(0.6 + 0.4 * var(--open, 0)));
   pointer-events: none;
 }
 
@@ -689,5 +711,112 @@
 
   .sheet:not(.sheet--flat):not(.sheet--frozen) .strip {
     transform: none;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Single-page layout (plan §5.5)                                     */
+/*                                                                    */
+/* Below 46rem the stage sets `data-layout="single"`: one full-width   */
+/* page, no spread and no sheet. The page change is a 160 ms fade of   */
+/* the incoming page over the outgoing one; the outgoing layer is      */
+/* `aria-hidden` + `inert`, so only the visible page is reachable.      */
+/* The paper keeps its own 3D pose (it is still `translateZ` above the */
+/* board), so nothing here flattens the book; the fade lives on a leaf */
+/* layer, never on `.book` or `.book__page`.                           */
+/* ------------------------------------------------------------------ */
+
+.book[data-layout='single'] {
+  /* One page is 15 x 21 units: a portrait leaf, not the 10:7 spread. */
+  --book-w: min(88vw, calc(66vh * 5 / 7));
+  aspect-ratio: 5 / 7;
+
+  /* A phone page is read, not squinted at: the type floor is raised so the
+     book-width scale never shrinks body copy below ~14 px. */
+  --page-pad-y: clamp(0.9rem, calc(var(--book-w) * 0.05), 1.6rem);
+  --page-pad-x: clamp(1rem, calc(var(--book-w) * 0.062), 1.9rem);
+  --page-font: clamp(0.9rem, calc(var(--book-w) * 0.042), 1.05rem);
+  --page-small: clamp(0.76rem, calc(var(--book-w) * 0.034), 0.9rem);
+  --page-title: clamp(1.15rem, calc(var(--book-w) * 0.064), 1.7rem);
+
+  /* No half-page nudge: the closed cover is the whole page here. */
+  transform:
+    translate(-50%, -50%)
+    rotateX(calc(55deg - 40deg * var(--open, 0)))
+    scale(calc(0.74 + 0.26 * var(--open, 0)));
+}
+
+/* Boards span the whole leaf: the `scaleX(0.5 + ...)` trick is what keeps a
+   spread's closed book one page wide, which does not apply to a single page. */
+.book[data-layout='single'] .book__board {
+  transform-origin: center;
+  transform: translateZ(-20px);
+}
+
+.book[data-layout='single'] .book__block {
+  transform-origin: center;
+  transform: translateZ(-12px);
+}
+
+/* The cover is hinged on the left edge like a front board. Opened, its back
+   face would land in empty space (there is no left page), so it is hidden for
+   the reading phases only; it still swings during OPENING and CLOSING. */
+.book[data-layout='single'] .book__cover {
+  left: 0;
+  width: 100%;
+}
+
+.book[data-layout='single'][data-phase='OPEN'] .book__cover,
+.book[data-layout='single'][data-phase='TURNING'] .book__cover {
+  visibility: hidden;
+}
+
+.book__page--single {
+  top: 0.8%;
+  bottom: 1.3%;
+  left: 0;
+  width: 100%;
+  padding: 0;
+  border-radius: 4px;
+  transform: translateZ(2px);
+  background-image:
+    linear-gradient(to right, rgb(21 32 45 / 11%) 0%, rgb(21 32 45 / 0%) 13%),
+    linear-gradient(to left, rgb(21 32 45 / 5%) 0%, rgb(21 32 45 / 0%) 7%);
+}
+
+/* Two full-page layers: the incoming page fades in over the outgoing one, so
+   the paper never flashes and the outgoing page is only paint, never content
+   (it is inert and `aria-hidden` in `SinglePage`). */
+.book__page--single .page__layer {
+  position: absolute;
+  inset: 0;
+  padding: var(--page-pad-y) var(--page-pad-x);
+}
+
+.book__page--single .page__layer--current {
+  animation: page-in 160ms ease-out both;
+}
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/* The single page has room for the whole summary; the spread's six-line clamp
+   would cut it short. */
+.book[data-layout='single'] .page__text {
+  -webkit-line-clamp: 9;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Not `none`: the fade must still end, because its `animationend` is what
+     drops the outgoing layer. 1ms is effectively instant. */
+  .book__page--single .page__layer--current {
+    animation-duration: 1ms;
   }
 }

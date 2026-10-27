@@ -1,0 +1,294 @@
+/* ------------------------------------------------------------------ */
+/* The desk scene (plan §3.2 direction A, §7.5)                       */
+/*                                                                    */
+/* Everything in this file belongs to `.desk`, which is a *sibling* of */
+/* `.book`, never an ancestor: masks, blend modes, gradients and the   */
+/* slow drift animations here cannot flatten the book's 3D context.    */
+/*                                                                    */
+/* No images. The wall is layered gradients, the oak is repeating      */
+/* gradients at low contrast, and the lattice light is a repeating     */
+/* gradient pattern masked into a pool and multiplied onto the desk.   */
+/* The whole layer is decoration: `aria-hidden` in the markup and      */
+/* `pointer-events: none` here, so it never takes a click or a tab     */
+/* stop, and it can never sit in front of the book.                    */
+/* ------------------------------------------------------------------ */
+
+.desk {
+  position: absolute;
+  inset: 0;
+  /* Contains every blend mode below: nothing blends with the page behind
+     the stage. */
+  isolation: isolate;
+  background: #dfe5df;
+  pointer-events: none;
+}
+
+/* Limewashed wall. A bright band across the top of the stage: the camera is
+   looking slightly down at the desk, so the room only shows as a strip. */
+.desk__wall {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 24%;
+  background-color: var(--color-limewash);
+  background-image:
+    radial-gradient(120% 150% at 16% -12%, #f9fcf7 0%, rgb(249 252 247 / 0%) 58%),
+    radial-gradient(80% 110% at 88% 0%, rgb(255 251 232 / 58%) 0%, rgb(255 251 232 / 0%) 62%),
+    /* Limewash brush: a fine, barely visible streak, not a texture image. */
+    repeating-linear-gradient(
+      99deg,
+      rgb(21 32 45 / 2.5%) 0 2px,
+      rgb(21 32 45 / 0%) 2px 9px
+    ),
+    linear-gradient(to bottom, #eef3ee 0%, #e5ebe5 56%, #d5dcd6 100%);
+  box-shadow:
+    inset 0 0 16vw rgb(21 32 45 / 9%),
+    inset 0 -2vh 3vh rgb(21 32 45 / 9%);
+}
+
+/* The oak desk. Bright where the window light lands (upper left), falling to a
+   deeper oak at the near edge; the grain is two misaligned repeating
+   gradients, one dark and one light, at a few percent alpha. */
+.desk__surface {
+  position: absolute;
+  inset: 24% 0 0;
+  background-color: var(--color-oak);
+  background-image:
+    radial-gradient(72% 96% at 20% -10%, rgb(255 249 230 / 44%) 0%, rgb(255 249 230 / 0%) 66%),
+    repeating-linear-gradient(92deg, rgb(88 62 36 / 7%) 0 1px, rgb(88 62 36 / 0%) 1px 7px),
+    repeating-linear-gradient(
+      87deg,
+      rgb(255 255 255 / 6%) 0 2px,
+      rgb(255 255 255 / 0%) 2px 15px
+    ),
+    linear-gradient(to bottom, #c9b18d 0%, var(--color-oak) 30%, #a68d6c 100%);
+  box-shadow:
+    inset 0 1.2vh 2.4vh rgb(21 32 45 / 11%),
+    inset 0 1px 0 rgb(255 255 255 / 38%);
+}
+
+/* Sunlight. A warm, screen-blended pool where the window light lands on the
+   desk; it is what makes the oak read as lit instead of as a flat swatch. */
+.desk__light {
+  position: absolute;
+  top: 14%;
+  left: -6%;
+  width: 46%;
+  height: 96%;
+  background: radial-gradient(
+    52% 44% at 42% 44%,
+    rgb(255 250 232 / 62%) 0%,
+    rgb(255 248 226 / 26%) 46%,
+    rgb(255 248 226 / 0%) 76%
+  );
+  mix-blend-mode: screen;
+}
+
+/* Two lattice shadows at different scales and speeds. Each is a crossed pair
+   of repeating gradients (the moucharabieh bars) masked into a soft pool, so
+   the pattern only exists where light falls, and multiplied onto the desk. */
+.desk__lattice {
+  position: absolute;
+  /* Overhangs the stage so the drift can never slide an edge into view. */
+  inset: -14%;
+  mix-blend-mode: multiply;
+  will-change: transform;
+  animation:
+    desk-drift-a 90s ease-in-out infinite alternate,
+    desk-breathe 18s ease-in-out infinite alternate;
+}
+
+.desk__lattice--near {
+  background-image:
+    repeating-linear-gradient(58deg, rgb(21 32 45 / 11%) 0 2px, rgb(21 32 45 / 0%) 2px 4px),
+    repeating-linear-gradient(58deg, rgb(21 32 45 / 5%) 0 4px, rgb(21 32 45 / 0%) 4px 21px),
+    repeating-linear-gradient(-58deg, rgb(21 32 45 / 11%) 0 2px, rgb(21 32 45 / 0%) 2px 4px),
+    repeating-linear-gradient(-58deg, rgb(21 32 45 / 5%) 0 4px, rgb(21 32 45 / 0%) 4px 21px);
+  mask-image: radial-gradient(
+    46% 40% at 27% 46%,
+    #000 0%,
+    rgb(0 0 0 / 62%) 44%,
+    rgb(0 0 0 / 0%) 78%
+  );
+  -webkit-mask-image: radial-gradient(
+    46% 40% at 27% 46%,
+    #000 0%,
+    rgb(0 0 0 / 62%) 44%,
+    rgb(0 0 0 / 0%) 78%
+  );
+}
+
+/* The second pool: wider bars, longer period, a different corner, so the two
+   patterns never resolve into one regular grid. */
+.desk__lattice--far {
+  background-image:
+    repeating-linear-gradient(64deg, rgb(21 32 45 / 8%) 0 3px, rgb(21 32 45 / 0%) 3px 6px),
+    repeating-linear-gradient(64deg, rgb(21 32 45 / 4%) 0 6px, rgb(21 32 45 / 0%) 6px 34px),
+    repeating-linear-gradient(-64deg, rgb(21 32 45 / 8%) 0 3px, rgb(21 32 45 / 0%) 3px 6px),
+    repeating-linear-gradient(-64deg, rgb(21 32 45 / 4%) 0 6px, rgb(21 32 45 / 0%) 6px 34px);
+  mask-image: radial-gradient(
+    52% 44% at 74% 78%,
+    #000 0%,
+    rgb(0 0 0 / 55%) 46%,
+    rgb(0 0 0 / 0%) 80%
+  );
+  -webkit-mask-image: radial-gradient(
+    52% 44% at 74% 78%,
+    #000 0%,
+    rgb(0 0 0 / 55%) 46%,
+    rgb(0 0 0 / 0%) 80%
+  );
+  animation:
+    desk-drift-b 140s ease-in-out infinite alternate,
+    desk-breathe 26s ease-in-out infinite alternate-reverse;
+}
+
+@keyframes desk-drift-a {
+  from {
+    transform: translate3d(-1.6%, -1.2%, 0);
+  }
+  to {
+    transform: translate3d(1.6%, 1.4%, 0);
+  }
+}
+
+@keyframes desk-drift-b {
+  from {
+    transform: translate3d(1.8%, 1%, 0);
+  }
+  to {
+    transform: translate3d(-1.4%, -1.6%, 0);
+  }
+}
+
+/* The shadow never drops to nothing: real light through a lattice breathes as
+   air moves, it does not pulse. Amplitude stays around ±6%. */
+@keyframes desk-breathe {
+  from {
+    opacity: 0.94;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Corner falloff. Sits above the light but below the book, so the desk darkens
+   at the edges of the frame and the book stays the brightest large object. */
+.desk__falloff {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(120% 104% at 46% 34%, rgb(21 32 45 / 0%) 48%, rgb(21 32 45 / 17%) 100%),
+    linear-gradient(to bottom, rgb(21 32 45 / 0%) 78%, rgb(21 32 45 / 10%) 100%);
+}
+
+/* ------------------------------------------------------------------ */
+/* Props: two shapes, both at the far corners, both out of the book's  */
+/* 3D chain and out of the tab order.                                  */
+/* ------------------------------------------------------------------ */
+
+/* Mint tea in a small glass. Glass body, mint at the bottom, a brass rim, and
+   a faint steam wisp above it (::before). No image, no filter. */
+.desk__glass {
+  position: absolute;
+  bottom: 8%;
+  left: 6.5%;
+  width: clamp(34px, 3.2vw, 52px);
+  height: clamp(64px, 6.2vw, 96px);
+  border-radius: 6% 6% 10% 10% / 3% 3% 9% 9%;
+  background:
+    linear-gradient(
+      to bottom,
+      rgb(255 255 255 / 52%) 0%,
+      rgb(255 255 255 / 26%) 34%,
+      rgb(190 228 205 / 44%) 62%,
+      rgb(104 158 126 / 58%) 100%
+    ),
+    linear-gradient(to bottom, rgb(255 255 255 / 0%) 0%, rgb(21 32 45 / 8%) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 55%),
+    inset -3px 0 6px rgb(255 255 255 / 34%),
+    inset 0 0 0 3px rgb(233 237 234 / 22%),
+    0 0.5rem 0.9rem rgb(83 58 32 / 26%);
+}
+
+/* The brass rim. */
+.desk__glass::after {
+  position: absolute;
+  inset: 4% 6% auto;
+  height: 9%;
+  border-radius: 50%;
+  background: linear-gradient(to bottom, rgb(188 148 64 / 55%), rgb(188 148 64 / 12%));
+  content: '';
+}
+
+/* Steam: a soft vertical wisp, drifting on a 16 s cycle. */
+.desk__glass::before {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  width: 52%;
+  height: 74%;
+  border-radius: 50% 50% 42% 42% / 72% 72% 28% 28%;
+  background: linear-gradient(to top, rgb(255 255 255 / 34%), rgb(255 255 255 / 0%) 88%);
+  content: '';
+  animation: desk-steam 16s ease-in-out infinite alternate;
+}
+
+@keyframes desk-steam {
+  from {
+    transform: translateX(-58%) translateY(2%) scaleY(0.94);
+  }
+  to {
+    transform: translateX(-42%) translateY(-4%) scaleY(1.06);
+  }
+}
+
+/* A pen, laid at an angle on the near-right corner: dark barrel, brass band,
+   its own small shadow. */
+.desk__pen {
+  position: absolute;
+  right: 7%;
+  bottom: 15%;
+  width: clamp(88px, 8.5vw, 148px);
+  height: clamp(5px, 0.45vw, 7px);
+  border-radius: 999px;
+  background: linear-gradient(
+    to bottom,
+    #1b2a3d 0%,
+    #33475f 42%,
+    #1a2634 78%,
+    #101a25 100%
+  );
+  box-shadow: 0 0.35rem 0.55rem rgb(60 42 22 / 30%);
+  transform: rotate(-19deg);
+}
+
+.desk__pen::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 62%;
+  width: 9%;
+  border-radius: 2px;
+  background: linear-gradient(to bottom, #d8b25e, var(--color-brass) 55%, #8d6c2c);
+  content: '';
+}
+
+/* ------------------------------------------------------------------ */
+/* Reduced motion: the light stops drifting, the steam stops rising.   */
+/* `paused` rather than `none`, so the pose is kept rather than reset. */
+/* ------------------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  .desk__lattice,
+  .desk__glass::before {
+    animation-play-state: paused;
+  }
+}
+
+/* A phone can only show a frame of desk around the page; the props would be
+   cropped anyway, so the scene stays a plain lit surface there. */
+.app__scene[data-layout='single'] .desk__glass,
+.app__scene[data-layout='single'] .desk__pen {
+  display: none;
+}
