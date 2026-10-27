@@ -1,0 +1,14 @@
+:root {
+  /* The Logbook — design tokens (Direction A: Daylight in Tunis) */
+  --color-door-blue: #1d4f9f;
+  --color-limewash: #e9edea;
+  --color-brass: #bc9440;
+  --color-ink: #15202d;
+  --color-oak: #b89f7e;
+  --color-seal-red: #b3261e;
+}
+
+body {
+  background: var(--color-ink);
+  color: var(--color-limewash);
+}
