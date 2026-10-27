@@ -72,11 +72,30 @@
   transform: translateZ(-20px) scaleX(calc(0.5 + 0.5 * var(--open, 0)));
 }
 
+/* The board sits 23px behind the pages, so perspective pulls its projected
+   edge inward by more than its 0.5% layout overhang. With the old overhang the
+   page covered the board's edge on the left and top and its drop shadow fell
+   straight onto the ink stage, reading as a dark band. The board is now inset
+   far enough that the oak rim stays visible all round at every pose. */
 .book__board {
-  inset: -0.8% -0.5% -1.6%;
+  inset: -2% -2% -1.6%;
   border-radius: 6px;
   background: var(--color-oak);
   box-shadow: 0 1.4rem 3rem rgb(0 0 0 / 45%);
+}
+
+/* Contact shadow on the desk. It has no opacity of its own (an alpha gradient
+   instead), so it cannot flatten anything, and it lives below every board. */
+.book__contact {
+  position: absolute;
+  right: 4%;
+  bottom: -7%;
+  left: 4%;
+  height: 10%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgb(0 0 0 / 40%), rgb(0 0 0 / 0%) 70%);
+  transform: translateZ(-24px) scaleX(calc(0.62 + 0.38 * var(--open, 0)));
+  pointer-events: none;
 }
 
 .book__block {
@@ -108,6 +127,9 @@
   left: 0;
   border-radius: 4px 0 0 4px;
   transform-origin: right center;
+  /* Depth only: `2px` above the right page, `3px` for the left, so a sheet can
+     always ride above the page it covers without ever using `z-index`. */
+  transform: translateZ(3px);
   background-image: linear-gradient(
     to right,
     rgb(21 32 45 / 0%) 72%,
@@ -119,6 +141,7 @@
   left: 50%;
   border-radius: 0 4px 4px 0;
   transform-origin: left center;
+  transform: translateZ(2px);
   background-image: linear-gradient(
     to right,
     rgb(21 32 45 / 9%) 0%,
@@ -163,6 +186,12 @@
   line-height: 1.12;
   letter-spacing: -0.01em;
   text-wrap: balance;
+}
+
+/* Programmatic landing point for the turn's focus handoff, not a control: the
+   live region already says where the reader is. */
+.page__title:focus {
+  outline: none;
 }
 
 .page__meta {
@@ -275,6 +304,253 @@
   font-weight: 600;
   letter-spacing: 0.2em;
   text-transform: uppercase;
+}
+
+/* ------------------------------------------------------------------ */
+/* The turning sheet                                                  */
+/*                                                                    */
+/* One face per side, twelve nested strips per face. Clipping exists   */
+/* only on `.strip__clip`; nothing here sets `filter`, `mask`,         */
+/* `mix-blend-mode` or `opacity` on a 3D ancestor, and depth is        */
+/* `translateZ` only.                                                 */
+/* ------------------------------------------------------------------ */
+
+.sheet {
+  /* Lengths, not percentages: a nested strip's 100% is its parent's 1/12th. */
+  --page-w: calc(var(--book-w) / 2);
+  --strip-w: calc(var(--book-w) / 24);
+  /* Sheet position, written once at render and once per frame by the loop. */
+  --t: 0;
+  /* A sheet thickness above the page it rests on (2.5px / 3.5px, matching the
+     pages' 2px and 3px), bulging to ~9px at the middle of the turn. */
+  --lift: calc(2.5px + 1px * var(--t) + 6px * sin(180deg * var(--t)));
+  /* Peak strength of the per-strip shade. The visible opacity is this times
+     `sin(180deg * t)` (zero at both flat poses) and a near-uniform strip
+     factor, so the page reads as one shaded surface, not twelve. */
+  --shade-depth: 0.52;
+
+  position: absolute;
+  top: 0.8%;
+  bottom: 1.3%;
+  left: 50%;
+  width: 50%;
+  /* The book inherits the chrome's limewash text colour; paper text is ink.
+     Without this the whole sheet is paper-on-paper. */
+  color: var(--color-ink);
+  transform-origin: left center;
+  transform-style: preserve-3d;
+  /* The sheet only ever rotates this way: a backward turn is the same pose
+     read backwards, so the origin and the sign never change. */
+  transform: translateZ(var(--lift)) rotateY(calc(-180deg * var(--t)));
+  pointer-events: none;
+}
+
+.sheet__face {
+  position: absolute;
+  inset: 0;
+  border-radius: 3px;
+  /* Opaque paper: the hidden face must never show through the visible one.
+     Half a pixel behind the strips (z=0) so the face is a backstop for the
+     gaps, never a coplanar competitor: two opaque planes at exactly the same
+     depth z-fight, which washes the text out at both flat poses. */
+  background-color: var(--color-limewash);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transform-style: preserve-3d;
+  transform: translateZ(-0.5px);
+}
+
+.sheet__face--recto {
+  background-image: linear-gradient(
+    to right,
+    rgb(21 32 45 / 9%) 0%,
+    rgb(21 32 45 / 0%) 28%
+  );
+}
+
+/* Authored in right-page space and rotated about its own centre: the content
+   reads upright once the sheet has landed on the left, with the spine on its
+   local right edge (the near-spine gutter stays near the spine). */
+.sheet__face--verso {
+  border-radius: 4px 0 0 4px;
+  background-image: linear-gradient(
+    to right,
+    rgb(21 32 45 / 0%) 72%,
+    rgb(21 32 45 / 9%) 100%
+  );
+  /* Rotate first, then step back in the parent's frame, so the flip does not
+     turn the recess into a protrusion. */
+  transform: translateZ(-0.5px) rotateY(180deg);
+}
+
+/* Strip widths are fixed lengths, and each strip sits at the right edge of the
+   one before it, so the twelve hinges form one chain along the page. */
+.strip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--strip-w);
+  height: 100%;
+  /* No background here: an unshaded limewash layer under the strip would show
+     through the antialiased edge of the next strip as a bright hairline once
+     the shade is visible. The clip below owns the paper. */
+  transform-origin: left center;
+  transform-style: preserve-3d;
+  /* The bend: `--w` is the strip's share of the curl and `--t` is the turn.
+     `sin(180deg * t)` is 0 at both ends, so the sheet is perfectly flat on the
+     page it starts from and on the page it lands on. */
+  transform: rotateY(calc(-1 * var(--curl, 60.159deg) * sin(180deg * var(--t)) * var(--w, 0)));
+}
+
+.strip .strip {
+  left: 100%;
+}
+
+/* The only clipping element. `contain` keeps the twelve full page clones from
+   costing layout or paint outside their slice. Each strip but the last reaches
+   a hair past its right edge so the sub-pixel gap between two flat strips
+   cannot show the face behind (the next strip paints over the overlap). */
+.strip__clip {
+  position: absolute;
+  inset: 0 -0.75px 0 0;
+  overflow: hidden;
+  contain: layout paint;
+  background-color: var(--color-limewash);
+}
+
+.strip[data-strip='11'] .strip__clip {
+  right: 0;
+}
+
+/* A full page clone, shifted so the clip shows slice `i`. `left` (not a
+   transform) keeps the text laid out and rasterised at its final position. */
+.strip__content {
+  position: absolute;
+  top: 0;
+  left: calc(-1 * var(--i, 0) * var(--strip-w));
+  width: var(--page-w);
+  height: 100%;
+  padding: var(--page-pad-y) var(--page-pad-x);
+  background-color: var(--color-limewash);
+  background-image: linear-gradient(
+    to right,
+    rgb(21 32 45 / 9%) 0%,
+    rgb(21 32 45 / 0%) 28%
+  );
+}
+
+.sheet__face--verso .strip__content {
+  background-image: linear-gradient(
+    to right,
+    rgb(21 32 45 / 0%) 72%,
+    rgb(21 32 45 / 9%) 100%
+  );
+}
+
+/* Per-strip shading, authored once for the whole page and sampled per strip:
+   the twelve shade elements share one full-page gradient, each showing only
+   its own slice (`background-position-x` slides the image by one strip width
+   per strip). The ramp is the physical profile of the sheet: deepest ink at
+   the fold/spine, neutral paper through the middle, a soft highlight at the
+   fore edge where it catches the light. At both flat poses `sin(180deg * t)`
+   is zero, so the whole veil disappears. */
+.strip__shade {
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(
+    to right,
+    rgb(21 32 45 / 62%) 0%,
+    rgb(21 32 45 / 46%) 12%,
+    rgb(21 32 45 / 24%) 32%,
+    rgb(21 32 45 / 6%) 50%,
+    rgb(21 32 45 / 0%) 56%,
+    rgb(255 255 255 / 0%) 62%,
+    rgb(255 255 255 / 18%) 80%,
+    rgb(255 255 255 / 32%) 91%,
+    rgb(255 255 255 / 14%) 100%
+  );
+  background-repeat: no-repeat;
+  background-size: calc(var(--strip-w) * 12) 100%;
+  background-position-x: calc(var(--strip-w) * var(--i, 0) * -1);
+  /* `--s` only nudges the strength (0.9..1): weighting it fully by curl would
+     reintroduce twelve visible steps even with one continuous gradient. */
+  opacity: calc(var(--shade-depth) * sin(180deg * var(--t)) * (0.9 + 0.1 * var(--s, 1)));
+  pointer-events: none;
+}
+
+.sheet__face--verso .strip__shade {
+  background-image: linear-gradient(
+    to left,
+    rgb(21 32 45 / 62%) 0%,
+    rgb(21 32 45 / 46%) 12%,
+    rgb(21 32 45 / 24%) 32%,
+    rgb(21 32 45 / 6%) 50%,
+    rgb(21 32 45 / 0%) 56%,
+    rgb(255 255 255 / 0%) 62%,
+    rgb(255 255 255 / 18%) 80%,
+    rgb(255 255 255 / 32%) 91%,
+    rgb(255 255 255 / 14%) 100%
+  );
+}
+
+/* One gradient for the sheet as a whole, driven by the root angle: the near
+   spine edge darkens as the sheet lifts away from the light. */
+.sheet__sheen {
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(
+    to right,
+    rgb(21 32 45 / 50%) 0%,
+    rgb(21 32 45 / 0%) 58%
+  );
+  opacity: calc(0.45 * sin(180deg * var(--t)));
+  transform: translateZ(0.5px);
+  pointer-events: none;
+}
+
+/* Fore-edge corners only: the spine edge stays square. The recto's fore edge
+   is its local right, the verso's its local left (see `TurningSheet`). */
+.sheet__face--recto .strip[data-edge='fore'],
+.sheet__face--recto .strip[data-edge='fore'] .strip__clip {
+  border-radius: 0 3px 3px 0;
+}
+
+.sheet__face--verso .strip[data-edge='fore'],
+.sheet__face--verso .strip[data-edge='fore'] .strip__clip {
+  border-radius: 3px 0 0 3px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Reduced motion: a flat crossfade, no swing, no strips              */
+/* ------------------------------------------------------------------ */
+
+/* `TurningSheet` renders this instead of the strip chain when reduced motion
+   is on. Two spreads, crossfading over `TURN_CROSSFADE_MS` (the loop's own
+   `motionScale`), committing at the same point as a swing would. */
+.sheet--flat {
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  transform: translateZ(4px);
+  transform-style: flat;
+}
+
+.sheet--flat .sheet__slot {
+  /* Above the resting pages (2px / 3px) and in paint order, since the sheet is
+     flattened. Inline depth would be meaningless in a flat layout. */
+  transform: none;
+  backface-visibility: visible;
+}
+
+/* The outgoing spread fades out over the incoming one. `--t` runs 0 -> 1
+   forward and 1 -> 0 backward, so the direction picks the right fade. */
+.sheet--flat[data-dir='1'] .sheet__slot--out {
+  opacity: calc(1 - var(--t));
+}
+
+.sheet--flat[data-dir='-1'] .sheet__slot--out {
+  opacity: var(--t);
 }
 
 /* ------------------------------------------------------------------ */
@@ -402,5 +678,16 @@
   .book[data-phase='OPEN'] .book__cover,
   .book[data-phase='TURNING'] .book__cover {
     visibility: hidden;
+  }
+
+  /* Same belt-and-braces for the sheet: if the JS preference is stale for a
+     frame, the swing is already gone. A freeze opts out because a frozen
+     still exists to be inspected. */
+  .sheet:not(.sheet--flat):not(.sheet--frozen) {
+    transform: translateZ(var(--lift));
+  }
+
+  .sheet:not(.sheet--flat):not(.sheet--frozen) .strip {
+    transform: none;
   }
 }

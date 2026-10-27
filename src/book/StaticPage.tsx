@@ -19,6 +19,8 @@ export interface StaticPageProps {
   readonly page: Page
   readonly project?: Project
   readonly side: PageSide
+  /** Slot identity (`"<spread>.<side>"`), used to park focus for a turn. */
+  readonly slot: string
   readonly inert: boolean
   readonly contents?: readonly ContentsEntry[]
   readonly about?: About
@@ -30,6 +32,7 @@ export function StaticPage({
   page,
   project,
   side,
+  slot,
   inert,
   contents,
   about,
@@ -40,6 +43,7 @@ export function StaticPage({
     <div
       className={`book__page book__page--${side}`}
       data-page={page.key}
+      data-slot={slot}
       inert={inert}
       aria-hidden={inert ? true : undefined}
     >

@@ -114,6 +114,9 @@ export function PageContent({
   // The sheet variant deliberately sets no ids: it is a second rendering of a
   // page that already has one in the document.
   const titleId = variant === 'page' ? `page-title-${page.key}` : undefined
+  // A page heading is a landing point for the turn's focus handoff, not a
+  // control: reachable by script, never added to the tab order.
+  const titleTabIndex = variant === 'page' ? -1 : undefined
 
   return (
     <article className={`page__body page__body--${side}`} aria-labelledby={titleId}>
@@ -121,7 +124,7 @@ export function PageContent({
 
       {page.kind === 'contents' ? (
         <>
-          <h2 className="page__title" id={titleId}>
+          <h2 className="page__title" id={titleId} tabIndex={titleTabIndex}>
             Contents
           </h2>
           <ol className="page__contents">
@@ -139,7 +142,7 @@ export function PageContent({
 
       {page.kind === 'about' ? (
         <>
-          <h2 className="page__title" id={titleId}>
+          <h2 className="page__title" id={titleId} tabIndex={titleTabIndex}>
             {about?.headline ?? 'About'}
           </h2>
           {about === undefined ? null : <p className="page__text">{about.summary}</p>}
@@ -147,8 +150,8 @@ export function PageContent({
             <>
               <p className="page__eyebrow page__eyebrow--section">Languages</p>
               <ul className="page__list">
-                {about.languages.map((language) => (
-                  <li key={language}>{language}</li>
+                {about.languages.map((language, index) => (
+                  <li key={`${index}:${language}`}>{language}</li>
                 ))}
               </ul>
             </>
@@ -158,7 +161,7 @@ export function PageContent({
 
       {page.kind === 'story' ? (
         <>
-          <h2 className="page__title" id={titleId}>
+          <h2 className="page__title" id={titleId} tabIndex={titleTabIndex}>
             {titleOf(page, project)}
           </h2>
           {project === undefined ? null : (
@@ -169,8 +172,10 @@ export function PageContent({
           {project === undefined ? null : <p className="page__text">{project.summary}</p>}
           {project === undefined ? null : (
             <ul className="page__list">
-              {project.highlights.map((highlight) => (
-                <li key={highlight}>{highlight}</li>
+              {project.highlights.map((highlight, index) => (
+                // Placeholder content can repeat a highlight verbatim, so the
+                // text alone is not a stable key.
+                <li key={`${index}:${highlight}`}>{highlight}</li>
               ))}
             </ul>
           )}
@@ -183,7 +188,7 @@ export function PageContent({
 
       {page.kind === 'demo' ? (
         <>
-          <h2 className="page__title" id={titleId}>
+          <h2 className="page__title" id={titleId} tabIndex={titleTabIndex}>
             {titleOf(page, project)}
           </h2>
           {project === undefined ? null : <p className="page__meta">{project.period}</p>}
@@ -197,14 +202,14 @@ export function PageContent({
       ) : null}
 
       {page.kind === 'blank' ? (
-        <h2 className="page__title visually-hidden" id={titleId}>
+        <h2 className="page__title visually-hidden" id={titleId} tabIndex={titleTabIndex}>
           Blank page
         </h2>
       ) : null}
 
       {page.kind === 'contact' ? (
         <>
-          <h2 className="page__title" id={titleId}>
+          <h2 className="page__title" id={titleId} tabIndex={titleTabIndex}>
             Contact
           </h2>
           {site === undefined ? null : (
