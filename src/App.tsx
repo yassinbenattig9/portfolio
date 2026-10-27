@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { deriveSpreads, type Spread } from './content/deriveSpreads'
 import { loadContent } from './content/loadContent'
 import type { Portfolio } from './content/schema'
+import { isPerfEnabled, PerfOverlay } from './dev/PerfOverlay'
 import { getBookState, useBookStore } from './state/bookState'
 import { Hint } from './ui/Hint'
 import { detectWebGL, NoWebGL } from './ui/NoWebGL'
@@ -37,6 +38,9 @@ function App() {
   // Probed once, on the client, before the scene is ever requested: without
   // WebGL the 3D chunk is not downloaded at all.
   const [hasWebGL] = useState<boolean>(detectWebGL)
+  // `?perf` is a dev instrument (frame-time evidence, plan §7.7): without the
+  // flag nothing is mounted and the frame loop is untouched.
+  const [perfEnabled] = useState<boolean>(isPerfEnabled)
 
   const phase = useBookStore((state) => state.phase)
   const setSpreadCount = useBookStore((state) => state.setSpreadCount)
@@ -139,6 +143,7 @@ function App() {
           </div>
           {/* The hint describes book controls, so it exists only with a book. */}
           <Hint phase={phase} />
+          {perfEnabled ? <PerfOverlay /> : null}
         </>
       ) : (
         <NoWebGL site={content.site} contact={content.contact} />

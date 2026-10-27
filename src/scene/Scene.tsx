@@ -1,5 +1,6 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { Canvas } from '@react-three/fiber'
+import type { RootState } from '@react-three/fiber'
 import type { Page, Spread } from '../content/deriveSpreads'
 import type { Portfolio } from '../content/schema'
 import { Book } from './Book'
@@ -60,6 +61,18 @@ function buildPageText(content: Portfolio, spreads: readonly Spread[]): Readonly
 export function Scene({ spreads, content }: SceneProps) {
   const pageText = useMemo(() => buildPageText(content, spreads), [content, spreads])
   const [cameraX, cameraY, cameraZ] = CAMERA_POSES.closed.position
+  const warmedUp = useRef(false)
+
+  // Shader warm-up: three 0.186's `compile(scene, camera)` walks every mesh —
+  // hidden ones included — and builds its program, returning Set<Material>.
+  // Without it the first turn compiles the skinned sheet's material inside the
+  // frame that starts the curl, which reads as a stutter. `onCreated` fires
+  // once, after the scene graph exists and before the first render.
+  const warmUp = (state: RootState) => {
+    if (warmedUp.current) return
+    warmedUp.current = true
+    state.gl.compile(state.scene, state.camera)
+  }
 
   // three 0.186 removed PCFSoftShadowMap: "soft" silently falls back to PCF and
   // logs a warning, so request the PCF map that is actually in use.
@@ -70,6 +83,7 @@ export function Scene({ spreads, content }: SceneProps) {
       shadows="percentage"
       gl={{ antialias: true }}
       camera={{ fov: CAMERA_POSES.closed.fov, near: 0.1, far: 60, position: [cameraX, cameraY, cameraZ] }}
+      onCreated={warmUp}
     >
       <color attach="background" args={['#24262a']} />
       <Lights />
