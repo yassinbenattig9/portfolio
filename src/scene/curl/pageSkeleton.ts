@@ -49,8 +49,13 @@ export interface PageRig {
   readonly back: THREE.SkinnedMesh
   readonly frontMaterial: THREE.MeshStandardMaterial
   readonly backMaterial: THREE.MeshStandardMaterial
-  /** Writes the pose into the bones. Allocation-free: call it from `useFrame`. */
-  applyPose(pose: CurlPoseLike): void
+  /**
+   * Writes the pose into the bones. Allocation-free: call it from `useFrame`.
+   * `lift` is a vertical translation of the whole sheet, applied on the root
+   * bone after the bind: keep `group` still and animate the sheet through this,
+   * or every frame re-binds the skeleton.
+   */
+  applyPose(pose: CurlPoseLike, lift?: number): void
   /** Back to the flat bind pose without touching the geometry. */
   resetPose(): void
   /** Re-captures bind matrices from the current placement of `group`. */
@@ -160,6 +165,9 @@ export function createPageRig(options: PageRigOptions = {}): PageRig {
     // visible, so the culling test is simply off.
     face.frustumCulled = false
     face.receiveShadow = true
+    // The curl must throw its own contact shadow onto the page underneath: the
+    // stills are judged on exactly that.
+    face.castShadow = true
     group.add(face)
   }
 
@@ -187,9 +195,17 @@ export function createPageRig(options: PageRigOptions = {}): PageRig {
     }
   }
 
-  function applyPose(pose: CurlPoseLike): void {
+  function applyPose(pose: CurlPoseLike, lift = 0): void {
+    // The group is meant to stay still, so this check is expected to fail its
+    // first time only (the rig is parented after it is built) and never again:
+    // moving the sheet by a bone instead of by the group is what keeps the
+    // bind-pose equality holding and the 48 bone inversions off the frame path.
     group.updateWorldMatrix(true, false)
     if (!boundWorld.equals(group.matrixWorld)) rebind()
+
+    // A y translation commutes with the root's z rotation, so this is the same
+    // placement the group used to carry, without touching the group transform.
+    bones[0].position.y = lift
 
     const deltas = pose.deltas
     for (let i = 0; i < boneCount; i += 1) {
@@ -201,6 +217,7 @@ export function createPageRig(options: PageRigOptions = {}): PageRig {
 
   function resetPose(): void {
     for (const bone of bones) bone.rotation.z = 0
+    bones[0].position.y = 0
   }
 
   function dispose(): void {

@@ -76,9 +76,8 @@ function App() {
           return
         }
         case 'Escape': {
-          // TODO(T7): a TURNING phase will be committed by the curl animation.
-          // Until then, recover here so Esc can never leave the book stuck.
-          if (getBookState().phase === 'TURNING') getBookState().commitTurn()
+          // During TURNING the close command is dropped by the store: the sheet
+          // lands, then the next Esc closes the book. No force-commit here.
           const state = getBookState()
           if (state.phase !== 'OPEN') return
           event.preventDefault()
@@ -87,10 +86,9 @@ function App() {
         }
         case 'ArrowLeft':
         case 'ArrowRight': {
-          // TODO(T7): the visible turn (curl) is not implemented yet. Committing
-          // the previous turn here is what keeps navigation from freezing; it is
-          // the exact spot the animation will replace.
-          if (getBookState().phase === 'TURNING') getBookState().commitTurn()
+          // A second arrow mid-turn is dropped by the store (commands are
+          // guards), so the sheet is never cut and restarted: fast consecutive
+          // turns fall back to "one turn at a time", not a jump-cut.
           const state = getBookState()
           if (state.phase !== 'OPEN') return
           event.preventDefault()

@@ -3,8 +3,9 @@ import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { Spread } from '../content/deriveSpreads'
 import { getFreeze } from '../dev/freeze'
-import { getBookState, useBookStore } from '../state/bookState'
+import { assertInvariants, getBookState, useBookStore } from '../state/bookState'
 import { easeInOutCubic, progressAt } from '../state/timing'
+import { opennessFor } from './bookPose'
 import { Page, PAGE_HEIGHT, PAGE_WIDTH, type PageText } from './Page'
 import { TurnLayer, type TurnSheet } from './TurnLayer'
 
@@ -114,22 +115,25 @@ export function Book({ spreads, pageText }: BookProps) {
 
     // Progress is derived from the store's timestamp every frame; no state is
     // written while animating, only the two refs below (no per-frame setState).
-    let progress: number
-    if (open !== null) {
-      progress = easeInOutCubic(progressAt(open, now))
-    } else {
-      progress = state.phase === 'CLOSED' ? 0 : 1
-    }
+    // One openness value drives both the hinge and the left sheet: `CLOSING` is
+    // the opening window read backwards, so the cover swings shut instead of
+    // snapping shut and swinging open again.
+    const eased = open === null ? 0 : easeInOutCubic(progressAt(open, now))
+    const openness = opennessFor(state.phase, eased)
 
-    cover.rotation.z = progress * Math.PI
+    cover.rotation.z = openness * Math.PI
 
     // The left sheet only exists once the cover has swung past vertical; while
     // the book is closed it would stick out under the fore edge.
-    leftPage.visible = progress > 0.5
+    leftPage.visible = openness > 0.5
 
     if (open !== null && progressAt(open, now) >= 1) {
       if (state.phase === 'OPENING') state.commitOpen()
       else if (state.phase === 'CLOSING') state.commitClose()
+      // Dev-only, at most twice per transition (not per frame): a commit that
+      // leaves an impossible phase fails here instead of quietly corrupting the
+      // animation. `assertInvariants` is a no-op in production builds.
+      if (import.meta.env.DEV) assertInvariants()
     }
 
     // The page turn itself lives in `TurnLayer`: it poses the skinned sheet and

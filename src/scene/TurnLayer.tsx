@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import type { Spread } from '../content/deriveSpreads'
-import { getBookState, type PageTurn } from '../state/bookState'
+import { assertInvariants, getBookState, type PageTurn } from '../state/bookState'
 import { progressAt } from '../state/timing'
 import type { PageText } from './Page'
 import { BONE_COUNT, writeCurlPose, type MutableCurlPose } from './curl/curlPose'
@@ -127,14 +127,14 @@ export function TurnLayer({
     // never mirrored: `dir = -1` would push the sheet below the desk.
     const curlP = sheet.dir === 1 ? progress : 1 - progress
 
-    // Placement must be in place before `applyPose`, which re-binds the
-    // skeleton to the rig's world matrix when that matrix has moved.
-    const group = rig.group
-    group.position.set(0, rightPageY + (leftPageY - rightPageY) * curlP + SHEET_CLEARANCE, 0)
+    // The height is a bone translation, not a group transform: the group must
+    // stay still so the skeleton's bind-pose check holds and no per-frame
+    // re-bind happens (`pageSkeleton.applyPose`).
+    const lift = rightPageY + (leftPageY - rightPageY) * curlP + SHEET_CLEARANCE
 
     writeCurlPose(curlP, 1, pose)
-    rig.applyPose(pose)
-    group.visible = true
+    rig.applyPose(pose, lift)
+    rig.group.visible = true
 
     // Freeze stills are not turns: they never commit and never move the book.
     if (fixedProgress !== null || progress < 1) return
@@ -143,6 +143,9 @@ export function TurnLayer({
 
     committedRef.current = state.turn
     state.commitTurn()
+    // Dev-only, once per turn (not per frame): a commit that leaves an
+    // impossible phase fails here instead of quietly corrupting the book.
+    if (import.meta.env.DEV) assertInvariants()
   })
 
   if (faces === null) return null

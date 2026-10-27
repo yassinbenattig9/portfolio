@@ -30,7 +30,7 @@ export interface PageFace {
 /** What the frame loop is allowed to do with the sheet. */
 export interface PageMeshRig {
   readonly group: Group
-  applyPose(pose: CurlPoseLike): void
+  applyPose(pose: CurlPoseLike, lift?: number): void
 }
 
 export interface PageMeshProps {

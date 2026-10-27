@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useLayoutEffect, useState } from 'react'
 import * as THREE from 'three'
 
 /**
@@ -145,9 +145,20 @@ export interface PageTextureLease {
 
 interface PageTextureEntry {
   readonly texture: THREE.CanvasTexture
-  /** The copy this canvas was drawn from; a reload replaces the canvas. */
-  readonly text: PageText
   refs: number
+}
+
+/** One id per distinct `PageText` object, so a reload never aliases an old canvas. */
+const textIds = new WeakMap<PageText, number>()
+let nextTextId = 1
+
+function textIdFor(text: PageText): number {
+  const known = textIds.get(text)
+  if (known !== undefined) return known
+  const id = nextTextId
+  nextTextId += 1
+  textIds.set(text, id)
+  return id
 }
 
 /**
@@ -156,6 +167,11 @@ interface PageTextureEntry {
  * counted: the last holder releases the canvas and its GPU upload.
  */
 const textureCache = new Map<string, PageTextureEntry>()
+
+/** The text object is part of the key: a redraw is a new entry, never an eviction. */
+function cacheKey(side: PageSide, pageKey: string, text: PageText): string {
+  return `${side}:${pageKey}#${textIdFor(text)}`
+}
 
 function leasePageTexture(key: string, entry: PageTextureEntry): PageTextureLease {
   let released = false
@@ -182,22 +198,16 @@ export function acquirePageTexture(
   pageKey: string,
   text: PageText,
 ): PageTextureLease {
-  const key = `${side}:${pageKey}`
+  const key = cacheKey(side, pageKey, text)
   const existing = textureCache.get(key)
 
-  if (existing !== undefined && existing.text === text) {
+  if (existing !== undefined) {
     existing.refs += 1
     return leasePageTexture(key, existing)
   }
 
-  if (existing !== undefined) {
-    textureCache.delete(key)
-    existing.texture.dispose()
-  }
-
   const entry: PageTextureEntry = {
     texture: createPageTexture(side, pageKey, text),
-    text,
     refs: 1,
   }
   textureCache.set(key, entry)
@@ -205,14 +215,19 @@ export function acquirePageTexture(
 }
 
 export function Page({ side, pageKey, text, y }: PageProps) {
-  const lease = useMemo(
-    () => acquirePageTexture(side, pageKey, text),
-    [side, pageKey, text],
-  )
-  const texture = lease.texture
+  const [texture, setTexture] = useState<THREE.Texture | null>(null)
 
-  // CanvasTexture owns a canvas plus a GPU upload: drop this claim on unmount.
-  useEffect(() => () => lease.release(), [lease])
+  // Acquire in an effect and release in that effect's cleanup: React runs the
+  // pair exactly once per run (StrictMode's mount/unmount/mount included), so
+  // no claim is orphaned. A lease taken in `useMemo` is dropped by StrictMode's
+  // discarded first render and its count never returns to zero, which pins the
+  // canvas and its GPU upload for the life of the tab. A `text` change re-runs
+  // the effect (new key, new canvas) and releases the old lease here.
+  useLayoutEffect(() => {
+    const lease = acquirePageTexture(side, pageKey, text)
+    setTexture(lease.texture)
+    return () => lease.release()
+  }, [side, pageKey, text])
 
   return (
     <group rotation-y={side === 'left' ? Math.PI : 0}>

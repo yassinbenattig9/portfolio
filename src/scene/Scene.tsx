@@ -1,8 +1,9 @@
 import { useMemo, useRef } from 'react'
-import { Canvas } from '@react-three/fiber'
+import { Canvas, useFrame } from '@react-three/fiber'
 import type { RootState } from '@react-three/fiber'
 import type { Page, Spread } from '../content/deriveSpreads'
 import type { Portfolio } from '../content/schema'
+import { getBookState } from '../state/bookState'
 import { Book } from './Book'
 import { CameraRig, CAMERA_POSES } from './CameraRig'
 import { Desk } from './Desk'
@@ -58,6 +59,29 @@ function buildPageText(content: Portfolio, spreads: readonly Spread[]): Readonly
   return map
 }
 
+/**
+ * Shadow-map upkeep for the on-demand map set up in `onCreated`.
+ *
+ * A shadow map is 2048² re-rendered from scratch: while the book sits still it
+ * is pure waste. The map is redrawn on every frame that actually moves
+ * something (OPENING, CLOSING, TURNING — the hinge, the cover, the curl and
+ * the sheet's new contact shadow) plus the first frame after a transition ends,
+ * so whichever `useFrame` runs last cannot leave the map one frame stale.
+ * Sitting OPEN costs a boolean read per frame and no shadow pass.
+ */
+function ShadowMapSync() {
+  const wasAnimating = useRef(true)
+
+  useFrame((state) => {
+    const book = getBookState()
+    const animating = book.open !== null || book.turn !== null
+    if (animating || wasAnimating.current) state.gl.shadowMap.needsUpdate = true
+    wasAnimating.current = animating
+  })
+
+  return null
+}
+
 export function Scene({ spreads, content }: SceneProps) {
   const pageText = useMemo(() => buildPageText(content, spreads), [content, spreads])
   const [cameraX, cameraY, cameraZ] = CAMERA_POSES.closed.position
@@ -72,6 +96,10 @@ export function Scene({ spreads, content }: SceneProps) {
     if (warmedUp.current) return
     warmedUp.current = true
     state.gl.compile(state.scene, state.camera)
+    // The key light and the book only move during a transition, so the shadow
+    // map is rendered on demand (`ShadowMapSync`) instead of 60 times a second.
+    state.gl.shadowMap.autoUpdate = false
+    state.gl.shadowMap.needsUpdate = true
   }
 
   // three 0.186 removed PCFSoftShadowMap: "soft" silently falls back to PCF and
@@ -89,6 +117,7 @@ export function Scene({ spreads, content }: SceneProps) {
       <Lights />
       <Desk />
       <Book spreads={spreads} pageText={pageText} />
+      <ShadowMapSync />
       <CameraRig />
     </Canvas>
   )

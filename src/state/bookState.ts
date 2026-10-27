@@ -9,6 +9,11 @@
  * in `timing.ts`, so React re-renders only when a command flips the phase
  * (at most twice per transition) instead of once per frame.
  *
+ * The default clock is `performance.now()`, the same clock every consumer
+ * (the scene, the camera rig, the key handler) uses. `Date.now()` here would
+ * mix two epochs: a command that omits `now` would look like a start in the
+ * far future and its window would sit at progress 0 forever.
+ *
  * No `three` and no `react` imports: this module must stay testable in node and
  * reusable by the future CSS-3D fallback.
  */
@@ -78,7 +83,7 @@ export const useBookStore = create<BookState>()((set, get) => ({
     set({ lastSpread: Math.trunc(n) - 1 })
   },
 
-  openBook(now = Date.now()) {
+  openBook(now = performance.now()) {
     if (get().phase !== 'CLOSED') return
     set({
       phase: 'OPENING',
@@ -91,7 +96,7 @@ export const useBookStore = create<BookState>()((set, get) => ({
     set({ phase: 'OPEN', open: null })
   },
 
-  next(now = Date.now()) {
+  next(now = performance.now()) {
     const { phase, spread, lastSpread } = get()
     if (phase !== 'OPEN' || spread >= lastSpread) return
     set({
@@ -106,7 +111,7 @@ export const useBookStore = create<BookState>()((set, get) => ({
     })
   },
 
-  prev(now = Date.now()) {
+  prev(now = performance.now()) {
     const { phase, spread } = get()
     if (phase !== 'OPEN' || spread <= 0) return
     set({
@@ -121,7 +126,7 @@ export const useBookStore = create<BookState>()((set, get) => ({
     })
   },
 
-  jump(n, now = Date.now()) {
+  jump(n, now = performance.now()) {
     const { phase, spread, lastSpread } = get()
     if (phase !== 'OPEN' || !Number.isFinite(n)) return
     const upper = Math.max(lastSpread, 0)
@@ -140,7 +145,7 @@ export const useBookStore = create<BookState>()((set, get) => ({
     })
   },
 
-  close(now = Date.now()) {
+  close(now = performance.now()) {
     // Deliberately dropped during TURNING: a commitTurn must not land on a
     // book that is already closing.
     if (get().phase !== 'OPEN') return
