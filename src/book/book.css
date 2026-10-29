@@ -431,7 +431,12 @@
 /* The only clipping element. `contain` keeps the twelve full page clones from
    costing layout or paint outside their slice. Each strip but the last reaches
    a hair past its right edge so the sub-pixel gap between two flat strips
-   cannot show the face behind (the next strip paints over the overlap). */
+   cannot show the face behind (the next strip paints over the overlap).
+   INVARIANT: that overlap double-paints identical pixels and stays invisible
+   only while every strip's clone is pixel-identical — `PageContent`
+   variant="sheet", same font metrics, the whole page shifted by `i * strip
+   width` and nothing else. If any strip ever gets independent styling or a
+   different background, the overlap becomes a visible seam. */
 .strip__clip {
   position: absolute;
   inset: 0 -0.75px 0 0;
@@ -475,7 +480,12 @@
    per strip). The ramp is the physical profile of the sheet: deepest ink at
    the fold/spine, neutral paper through the middle, a soft highlight at the
    fore edge where it catches the light. At both flat poses `sin(180deg * t)`
-   is zero, so the whole veil disappears. */
+   is zero, so the whole veil disappears.
+   INVARIANT: all twelve shade elements sample the SAME full-page image —
+   identical `background-image`, `background-size` of twelve strip widths —
+   and differ only by `background-position-x`. The one gradient tiles
+   seamlessly across the sheet only while that holds; a per-strip size or
+   image makes the sampling boundaries read as seams. */
 .strip__shade {
   position: absolute;
   inset: 0;
@@ -718,8 +728,10 @@
 /* Single-page layout (plan §5.5)                                     */
 /*                                                                    */
 /* Below 46rem the stage sets `data-layout="single"`: one full-width   */
-/* page, no spread and no sheet. The page change is a 160 ms fade of   */
-/* the incoming page over the outgoing one; the outgoing layer is      */
+/* page, no spread and no sheet. The page change is a crossfade of     */
+/* `--crossfade-ms` (written inline from `CROSSFADE_MS` in `motion.ts`, */
+/* so the timing cannot drift from the JS turn clock); the outgoing    */
+/* layer is                                                            */
 /* `aria-hidden` + `inert`, so only the visible page is reachable.      */
 /* The paper keeps its own 3D pose (it is still `translateZ` above the */
 /* board), so nothing here flattens the book; the fade lives on a leaf */
@@ -794,9 +806,13 @@
 }
 
 .book__page--single .page__layer--current {
-  animation: page-in 160ms ease-out both;
+  /* Same number as the JS turn clock: `--crossfade-ms` is written inline on
+     the stage root from `CROSSFADE_MS` (`motion.ts`). */
+  animation: page-in var(--crossfade-ms, 160ms) ease-out both;
 }
 
+/* `StaticPage.tsx` waits for this exact keyframe's `animationend` to drop the
+   outgoing layer — the name is quoted there, keep the two in sync. */
 @keyframes page-in {
   from {
     opacity: 0;

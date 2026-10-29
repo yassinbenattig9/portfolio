@@ -16,8 +16,17 @@ import type { BookPhase, PageTurn } from '../state/bookState'
 /** Speed multiplier that lands the open/close window on its first frame. */
 export const REDUCED_MOTION_SCALE = 1000
 
-/** How long a page turn takes under reduced motion: a crossfade, not a swing. */
-export const TURN_CROSSFADE_MS = 180
+/**
+ * The one crossfade length for the whole book: the reduced-motion turn and the
+ * single-layout page fade share it. `BookStage` also writes it as the
+ * `--crossfade-ms` custom property on the stage root, so `book.css`'s
+ * `page-in` animation reads the same number and the durations cannot drift.
+ */
+export const CROSSFADE_MS = 160
+
+/** Reduced-motion turn duration = the crossfade itself (kept for call sites
+    and tests that speak of the turn specifically; derived from `CROSSFADE_MS`). */
+export const TURN_CROSSFADE_MS = CROSSFADE_MS
 
 const QUERY = '(prefers-reduced-motion: reduce)'
 

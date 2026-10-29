@@ -4,6 +4,13 @@ import { PageContent } from './PageContent'
 import type { PageLookup, PageSide } from './pageLookup'
 
 /**
+ * The keyframe `book.css` plays on the incoming single page. `SinglePage`
+ * waits for its `animationend` to drop the outgoing layer, so the name here
+ * and the `@keyframes` rule in `book.css` must stay the same string.
+ */
+const PAGE_IN_ANIMATION = 'page-in'
+
+/**
  * The paper of the book, in both layouts.
  *
  * `StaticPage` is one page of the open spread: a 3D plane hinged on the spine
@@ -123,7 +130,7 @@ export function SinglePage({
         onAnimationEnd={(event) => {
           // Bubbling child animations (none today) must not end the fade early.
           if (event.target !== event.currentTarget) return
-          if (event.animationName !== 'page-in') return
+          if (event.animationName !== PAGE_IN_ANIMATION) return
           onSettled?.()
         }}
       >

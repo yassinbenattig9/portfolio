@@ -1,7 +1,8 @@
 import type { CSSProperties, Ref } from 'react'
 import type { ContentsEntry } from '../content/deriveSpreads'
 import type { About, Contact, Site } from '../content/schema'
-import type { TurnDir } from '../state/bookState'
+import { getBookState, type TurnDir } from '../state/bookState'
+import { easeInOutCubic, progressAt } from '../state/timing'
 import { CURL_AMPLITUDE, STRIP_COUNT, shadeWeights, stripWeights } from './curlShape'
 import { useReducedMotion } from './motion'
 import { PageContent } from './PageContent'
@@ -38,6 +39,23 @@ import type { PageLookup } from './pageLookup'
  * Presentation only: the root is `aria-hidden` and `inert`, and every page is
  * rendered with `PageContent variant="sheet"` (no ids, links are spans).
  */
+
+/**
+ * The sheet pose at this instant, for the frame the sheet renders on.
+ *
+ * A mode change mid-turn (the `max-width: 46rem` layout query, reduced motion)
+ * re-renders the sheet with a fresh inline `--t`. Hardcoding a rest pose there
+ * showed the wrong page for one frame, until the rAF loop's first write. The
+ * store holds the turn's start stamp; `progressAt` gives the pose the loop is
+ * about to write, so the inline value is the right one immediately and the
+ * first `frameStep` continues from exactly there.
+ */
+function mountPose(dir: TurnDir): number {
+  const { phase, turn } = getBookState()
+  if (phase !== 'TURNING' || turn === null) return dir === 1 ? 0 : 1
+  const eased = easeInOutCubic(progressAt(turn, performance.now()))
+  return dir === 1 ? eased : 1 - eased
+}
 
 const WEIGHTS = stripWeights()
 const SHADES = shadeWeights()
@@ -152,10 +170,12 @@ export function TurningSheet({
   const frozen = turn !== null
   const flat = reduced && !frozen
 
-  // `--t` starts at the pose the sheet is in on its first paint: flat on the
-  // right for a forward turn, flat on the left for a backward one. The loop
+  // `--t` starts at the pose the sheet is actually in on its first paint,
+  // seeded from the store's turn progress (see `mountPose`): a turn in flight
+  // remounts at its true mid-turn pose, not at a rest pose. A frozen sheet
+  // keeps the pinned value; at rest the seed is the flat pose. The loop
   // overwrites it every frame; a frozen sheet keeps this exact value.
-  const style: CSSVars = { '--t': turn ?? (dir === 1 ? 0 : 1), '--curl': CURL_DEG }
+  const style: CSSVars = { '--t': turn ?? mountPose(dir), '--curl': CURL_DEG }
 
   if (flat) {
     // Reduced motion: the two spreads, crossfading in place. The outgoing

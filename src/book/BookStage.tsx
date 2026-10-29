@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
+  type CSSProperties,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
 import type { Spread } from '../content/deriveSpreads'
@@ -12,11 +13,16 @@ import type { Portfolio } from '../content/schema'
 import { getBookState, useBookStore } from '../state/bookState'
 import { Book } from './Book'
 import { frameStep } from './frameStep'
-import { motionScaleFor, useReducedMotion } from './motion'
+import { CROSSFADE_MS, motionScaleFor, useReducedMotion } from './motion'
 import { pageFor, projectMap, spreadLabel } from './pageLookup'
-import { clampPosition, stepFor, type PagePosition } from './pager'
+import { clampPosition, pageCount, ordinalOf, stepFor, type PagePosition } from './pager'
 import './book.css'
 import './desk.css'
+
+/** Custom properties are legal on a style object but missing from `CSSProperties`. */
+interface CSSVars extends CSSProperties {
+  readonly [key: `--${string}`]: string | number
+}
 
 /**
  * The CSS-3D stage: the desk, perspective, the `.book` element and the one
@@ -52,8 +58,9 @@ export interface BookStageProps {
   readonly content: Portfolio
 }
 
-/** How long the single-page crossfade takes; also shortens the store's turn. */
-const SINGLE_TURN_MS = 160
+/** The single-page crossfade takes `CROSSFADE_MS`; this is also the scale that
+    compresses the store's turn window so it commits when the fade lands. */
+const SINGLE_TURN_MS = CROSSFADE_MS
 
 /** A swipe must clear this many pixels horizontally, and be this much more
     horizontal than vertical, before it pages. */
@@ -201,7 +208,14 @@ export function BookStage({ spreads, content }: BookStageProps) {
       }
     }
 
-    frame = requestAnimationFrame(step)
+    // One synchronous step before the loop's first rAF: a mode change
+    // (layout query, reduced motion) re-runs this effect while a transition is
+    // in flight, and this writes the current pose immediately, so the sheet's
+    // inline seed and the first scheduled frame are the same pose — no gap
+    // frame at the old value. `step` already scheduled the next frame itself
+    // if the transition continues; if it reached its end, nothing is pending
+    // and `frame` stays 0 (a harmless `cancelAnimationFrame` argument).
+    step()
 
     return () => {
       running = false
@@ -244,6 +258,14 @@ export function BookStage({ spreads, content }: BookStageProps) {
       if (step.kind === 'spread') {
         if (step.dir === 1) state.next()
         else state.prev()
+      } else {
+        // A side flip never touches the store, so no TURNING phase runs to
+        // announce itself: the live region gets the page the reader just
+        // landed on (1-based, from `pager`'s ordinal). The functional update
+        // dedupes, so an identical note queued twice in a row never re-fires
+        // the region for the same position.
+        const note = `Page ${ordinalOf(step.to) + 1} of ${pageCount(spreads.length)}`
+        setTurnNote((current) => (current === note ? current : note))
       }
     },
     [reduced, singleMode, singlePage, spreads.length],
@@ -382,6 +404,7 @@ export function BookStage({ spreads, content }: BookStageProps) {
     <div
       className="app__scene"
       data-layout={layout}
+      style={{ '--crossfade-ms': `${CROSSFADE_MS}ms` } as CSSVars}
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
       onPointerCancel={() => {

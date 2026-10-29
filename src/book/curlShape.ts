@@ -1,7 +1,7 @@
 /**
  * The shape of the faux curl, as numbers.
  *
- * The CSS-3D sheet is cut into `STRIP_COUNT` vertical strips (a later task
+ * The CSS-3D sheet is cut into `STRIP_COUNT` vertical strips (the turning sheet
  * owns the DOM). Each strip is rotated a little more than the one before it,
  * which bends the sheet around an axis parallel to the spine. This module only
  * answers two questions, and pure answers keep them testable without a browser:

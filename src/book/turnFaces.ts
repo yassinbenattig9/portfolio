@@ -1,11 +1,11 @@
 /**
  * Which page sits in each of the four slots a page turn puts on screen.
  *
- * Pure: no React, no three.js, no store. `TurnLayer` renders what this returns,
+ * Pure: no React, no three.js, no store. `TurningSheet` renders what this returns,
  * so the rule that used to live inside that component can be unit-tested.
  *
  * One sheet always covers the spine, so a turn from spread `from` to spread
- * `to` needs four pages (the table in `TurnLayer.tsx`, encoded here):
+ * `to` needs four pages (the table in `TurningSheet.tsx`, encoded here):
  *
  * | dir | static left | static right | recto (front) | verso (back) |
  * |-----|-------------|--------------|---------------|--------------|
