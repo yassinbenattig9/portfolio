@@ -5,8 +5,8 @@ import { findMissingAssets, createContentLoader } from './lib.ts';
  * tests use, run before `vite build`.
  *
  * - Zod failures exit 1 with every field path and reason (no stack trace).
- * - Every asset path in the content must exist under `public/` (files are
- *   found by walking the document, not from a hardcoded list).
+ * - Every asset reference (the schema-derived whitelist in scripts/lib.ts)
+ *   must point at a file that exists under `public/`.
  * - An optional argument (or `PORTFOLIO_JSON`) points the gate at another
  *   file, e.g. a candidate document; the default is the real
  *   `src/content/portfolio.json`.

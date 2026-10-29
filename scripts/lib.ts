@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 import { createServer, type ViteDevServer } from 'vite';
-import type { Portfolio } from '../src/content/schema.ts';
+import { portfolioSchema, type Portfolio } from '../src/content/schema.ts';
 
 /**
  * Helpers shared by `validate-content.ts` and `build-plain.ts`.
@@ -15,6 +15,10 @@ import type { Portfolio } from '../src/content/schema.ts';
  * import that Node's resolver does not accept. Loading them through Vite keeps
  * `validateContent` as the single source of validation for the whole pipeline
  * (tests, runtime, plain page, build gate).
+ *
+ * One exception: `src/content/schema.ts` (only bare imports, no extensions
+ * problem) IS imported statically, so the asset-path whitelist below can be
+ * derived from `portfolioSchema` instead of a hand-copied list.
  */
 
 export const DEFAULT_CONTENT_PATH = 'src/content/portfolio.json';
@@ -79,19 +83,36 @@ function resolveJsonPath(contentPath?: string): string {
 }
 
 /**
- * Collects every string value that looks like a site-absolute asset path
- * (starts with `/`, has a file extension in its last segment, no whitespace).
- * Field names are deliberately not hardcoded: the walk finds the paths
- * wherever they live in the document.
+ * The fields whose string values are asset references that must exist under
+ * `public/`. Derived from the schema itself: `deriveAssetPathPatterns` walks
+ * `portfolioSchema` and keeps every string field that carries the schema's
+ * `mediaPath` rule (`startsWith("/media/")` in src/content/schema.ts). Array
+ * elements are recorded as `*`. For the current schema:
+ *
+ *   contact.cv
+ *   projects.*.right.demo.poster
+ *   projects.*.right.demo.src
+ *
+ * Deriving instead of hand-copying keeps the gate in sync with the schema
+ * automatically (a new `mediaPath` field is checked, a field once removed
+ * stops being checked), and free-text fields can no longer fail the media
+ * check by coincidence: only whitelisted fields are ever inspected.
  */
+let assetPathPatterns: readonly string[] | undefined;
+
+function getAssetPathPatterns(): readonly string[] {
+  return (assetPathPatterns ??= deriveAssetPathPatterns(portfolioSchema));
+}
+
 export interface AssetPathRef {
   readonly fieldPath: string;
   readonly value: string;
 }
 
+/** Collects every string value with its field path; the whitelist decides which must exist on disk. */
 export function collectAssetPaths(value: unknown, path: string): AssetPathRef[] {
   if (typeof value === 'string') {
-    return looksLikeAssetPath(value) ? [{ fieldPath: path, value }] : [];
+    return [{ fieldPath: path, value }];
   }
   if (Array.isArray(value)) {
     return value.flatMap((item, index) =>
@@ -106,17 +127,102 @@ export function collectAssetPaths(value: unknown, path: string): AssetPathRef[] 
   return [];
 }
 
-function looksLikeAssetPath(value: string): boolean {
-  return value.startsWith('/') && !/\s/.test(value) && /\.[a-z0-9]+$/i.test(value.split('/').pop() ?? '');
-}
-
 /** Returns the missing files, checked against `public/`. */
 export async function findMissingAssets(
   content: Portfolio,
   publicDir: string,
 ): Promise<AssetPathRef[]> {
-  const references = collectAssetPaths(content, '');
-  return references.filter(({ value }) => !existsSync(resolve(publicDir, value.slice(1))));
+  return collectAssetPaths(content, '').filter(
+    ({ fieldPath, value }) => isWhitelistedField(fieldPath) && !existsSync(resolve(publicDir, value.slice(1))),
+  );
+}
+
+/** True when the field path matches a whitelist pattern (`*` = array element). */
+function isWhitelistedField(fieldPath: string): boolean {
+  // `projects[0].right.demo.poster` and `projects.*.right.demo.poster` must
+  // line up segment by segment.
+  const segments = fieldPath.replace(/\[\d+\]/g, '.*').split('.');
+  return getAssetPathPatterns().some((pattern) => matchSegments(segments, pattern.split('.')));
+}
+
+function matchSegments(segments: readonly string[], pattern: readonly string[]): boolean {
+  return (
+    segments.length === pattern.length &&
+    segments.every((segment, index) => pattern[index] === '*' || pattern[index] === segment)
+  );
+}
+
+/**
+ * Structural subset of Zod's schema nodes, enough to walk a schema without
+ * depending on zod's public API surface. If zod's internals change shape,
+ * `deriveAssetPathPatterns` fails loudly instead of silently under-checking.
+ */
+interface SchemaNode {
+  readonly _zod?: {
+    readonly def?: {
+      readonly type?: string;
+      readonly shape?: Readonly<Record<string, SchemaNode>>;
+      readonly options?: readonly SchemaNode[];
+      readonly element?: SchemaNode;
+      readonly innerType?: SchemaNode;
+      readonly checks?: ReadonlyArray<{
+        readonly _zod?: {
+          readonly def?: {
+            readonly format?: string;
+            readonly prefix?: unknown;
+          };
+        };
+      }>;
+    };
+  };
+}
+
+/** A string carrying the schema's `mediaPath` rule: starts with "/media/". */
+function isMediaPathSchema(node: SchemaNode): boolean {
+  return (node._zod?.def?.checks ?? []).some(
+    (check) =>
+      check._zod?.def?.format === 'starts_with' && check._zod?.def?.prefix === '/media/',
+  );
+}
+
+/**
+ * Walks a Zod schema and returns the dotted field paths of every string
+ * field with the `mediaPath` rule. Throws on node kinds it does not know, so
+ * new schema constructs force an update to this walker rather than skipping
+ * the media check for that field.
+ */
+function deriveAssetPathPatterns(schema: unknown): readonly string[] {
+  const patterns: string[] = [];
+
+  function walk(node: SchemaNode, path: string): void {
+    const def = node._zod?.def;
+    if (!def) {
+      throw new Error(`cannot derive asset paths from the schema at "${path || 'root'}": unknown node shape (zod internals changed?)`);
+    }
+    if (def.type === 'optional' || def.type === 'nullable') {
+      return walk(def.innerType ?? {}, path);
+    }
+    if (def.type === 'union') {
+      return (def.options ?? []).forEach((option) => walk(option, path));
+    }
+    if (def.type === 'object') {
+      for (const [key, child] of Object.entries(def.shape ?? {})) {
+        walk(child, path.length === 0 ? key : `${path}.${key}`);
+      }
+      return;
+    }
+    if (def.type === 'array') {
+      return walk(def.element ?? {}, path.length === 0 ? '*' : `${path}.*`);
+    }
+    if (def.type === 'string') {
+      if (isMediaPathSchema(node)) patterns.push(path);
+      return;
+    }
+    // literal / boolean / enum / ... carry no asset paths.
+  }
+
+  walk(schema as SchemaNode, '');
+  return Array.from(new Set(patterns));
 }
 
 /** Escapes text for safe interpolation into HTML text and attributes. */

@@ -7,6 +7,6 @@ export default defineConfig({
   test: {
     // Pure-logic unit tests only; no DOM, no WebGL, no browser mode.
     environment: 'node',
-    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    include: ['src/**/*.{test,spec}.{ts,tsx}', 'scripts/**/*.test.ts'],
   },
 })
