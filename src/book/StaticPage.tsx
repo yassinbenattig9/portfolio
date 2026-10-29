@@ -38,6 +38,8 @@ export interface StaticPageProps {
   readonly about?: About
   readonly contact?: Contact
   readonly site?: Site
+  /** `PageContent` callback; see its doc for the sheet-variant rule. */
+  readonly onJump?: (spreadIndex: number) => void
 }
 
 /** Page data every page renderer needs; kept in one shape for both layouts. */
@@ -46,6 +48,8 @@ export interface PageDataProps {
   readonly about?: About
   readonly contact?: Contact
   readonly site?: Site
+  /** `PageContent` callback; see its doc for the sheet-variant rule. */
+  readonly onJump?: (spreadIndex: number) => void
 }
 
 export function StaticPage({
@@ -58,6 +62,7 @@ export function StaticPage({
   about,
   contact,
   site,
+  onJump,
 }: StaticPageProps) {
   return (
     <div
@@ -76,6 +81,7 @@ export function StaticPage({
         about={about}
         contact={contact}
         site={site}
+        onJump={onJump}
       />
     </div>
   )
@@ -100,6 +106,7 @@ export function SinglePage({
   about,
   contact,
   site,
+  onJump,
 }: SinglePageProps) {
   return (
     <div
@@ -143,6 +150,7 @@ export function SinglePage({
           about={about}
           contact={contact}
           site={site}
+          onJump={onJump}
         />
       </div>
     </div>

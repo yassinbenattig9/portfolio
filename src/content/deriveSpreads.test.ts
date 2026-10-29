@@ -51,7 +51,9 @@ describe('deriveSpreads ordering', () => {
 
     const spreads = deriveSpreads(document)
 
-    expect(projectSpreads(spreads).map((spread) => spread.projectId)).toEqual(['project-a', 'project-c'])
+    expect(projectSpreads(spreads).map((spread) => spread.projectId)).toEqual(
+      ['invoice-signer', 'fleet-dashboard', 'group-crm', 'field-app'],
+    )
   })
 })
 
@@ -70,14 +72,14 @@ describe('deriveSpreads page pairing', () => {
     }
   })
 
-  it('builds 5 spreads over 10 pages for the shipped three visible projects', () => {
+  it('builds 7 spreads over 14 pages for the shipped five visible projects', () => {
     const document = content()
     const spreads = deriveSpreads(document)
     const expectedSpreads = 1 + visibleProjects(document).length + 1
 
     expect(spreads).toHaveLength(expectedSpreads)
-    expect(expectedSpreads).toBe(5)
-    expect(allPages(spreads)).toHaveLength(10)
+    expect(expectedSpreads).toBe(7)
+    expect(allPages(spreads)).toHaveLength(14)
   })
 
   it('keeps the page count even for any number of visible projects', () => {
@@ -131,9 +133,9 @@ describe('deriveSpreads project spreads', () => {
 
     const spreads = deriveSpreads(document)
 
-    expect(spreads.some((spread) => spread.projectId === 'project-b')).toBe(false)
-    expect(allPages(spreads).some((page) => page.projectId === 'project-b')).toBe(false)
-    expect(allPages(spreads)).toHaveLength(8)
+    expect(spreads.some((spread) => spread.projectId === 'erp-relay')).toBe(false)
+    expect(allPages(spreads).some((page) => page.projectId === 'erp-relay')).toBe(false)
+    expect(allPages(spreads)).toHaveLength(12)
   })
 
   it('does not create project spreads when every project is hidden', () => {
@@ -192,9 +194,11 @@ describe('deriveContents', () => {
     const document = content()
 
     expect(deriveContents(document, deriveSpreads(document)).map((entry) => entry.projectId)).toEqual([
-      'project-a',
-      'project-b',
-      'project-c',
+      'invoice-signer',
+      'erp-relay',
+      'fleet-dashboard',
+      'group-crm',
+      'field-app',
     ])
   })
 
@@ -204,8 +208,13 @@ describe('deriveContents', () => {
 
     const entries = deriveContents(document, deriveSpreads(document))
 
-    expect(entries.map((entry) => entry.projectId)).toEqual(['project-a', 'project-c'])
-    expect(entries.map((entry) => entry.spreadIndex)).toEqual([1, 2])
+    expect(entries.map((entry) => entry.projectId)).toEqual([
+      'invoice-signer',
+      'fleet-dashboard',
+      'group-crm',
+      'field-app',
+    ])
+    expect(entries.map((entry) => entry.spreadIndex)).toEqual([1, 2, 3, 4])
   })
 
   it('returns no entries when the book has no project spreads', () => {

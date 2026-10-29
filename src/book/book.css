@@ -282,11 +282,12 @@
   outline-color: var(--color-door-blue);
 }
 
-/* Contents: a reading list, not a control yet (page turns are a later task). */
+/* Contents: a ledger of the book. On the page variant each row is a real
+   control that turns to its spread; the sheet variant renders the identical
+   look as a span, so a turn's clone never adds a tab stop. */
 .page__contents {
   display: flex;
   flex-direction: column;
-  gap: 0.45em;
   margin: 0.2em 0 0;
   padding: 0;
   list-style: none;
@@ -294,10 +295,39 @@
 
 .page__contents-item {
   display: flex;
+}
+
+/* Real hit target: at least 44px tall. The paper is small, so 44px is the
+   physical floor, not a typographic one. */
+.page__contents-row {
+  display: flex;
   gap: 0.7em;
   align-items: baseline;
+  width: 100%;
+  min-height: 44px;
+  padding: 0.3em 0.5em;
+  border: 0;
+  border-radius: 2px;
+  background: none;
+  color: inherit;
+  font: inherit;
   font-size: var(--page-font);
   line-height: 1.25;
+  text-align: left;
+  cursor: pointer;
+}
+
+span.page__contents-row {
+  cursor: default;
+}
+
+.page__contents-row:hover {
+  background: rgb(21 32 45 / 5%);
+}
+
+.page__contents-row:focus-visible {
+  outline: 2px solid var(--color-door-blue);
+  outline-offset: -2px;
 }
 
 .page__contents-index {
@@ -310,14 +340,26 @@
   font-weight: 600;
 }
 
-/* Demo placeholder: paper, a brass keyline and a label. No image, no video. */
+/* The ledger's right column: the period, aligned on the row's tail edge. */
+.page__contents-period {
+  margin-left: auto;
+  color: rgb(21 32 45 / 62%);
+  font-size: var(--page-small);
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+/* Demo placeholder: paper, a brass keyline and a label. No image, no video.
+   The label breathes gently so the block reads as pending, not broken. */
 .page__demo {
   display: grid;
+  row-gap: 0.4em;
   place-items: center;
   height: 38%;
   border: 1px dashed rgb(188 148 64 / 75%);
   border-radius: 2px;
   background: rgb(188 148 64 / 8%);
+  padding: 1em;
 }
 
 .page__demo-label {
@@ -325,7 +367,33 @@
   font-size: var(--page-small);
   font-weight: 600;
   letter-spacing: 0.2em;
+  text-align: center;
   text-transform: uppercase;
+  animation: demo-breathe 3s ease-in-out infinite;
+}
+
+.page__demo-hint {
+  color: rgb(188 148 64 / 90%);
+  font-size: var(--page-small);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
+}
+
+@keyframes demo-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page__demo-label {
+    animation: none;
+  }
 }
 
 /* ------------------------------------------------------------------ */

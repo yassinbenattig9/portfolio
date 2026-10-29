@@ -1,35 +1,36 @@
 {
   "schemaVersion": 1,
   "site": {
-    "name": "Placeholder Name",
+    "name": "Yassin Benattig",
     "role": "Full Stack Developer",
     "theme": "daylight",
     "language": "en"
   },
   "contact": {
-    "email": "placeholder@example.com",
-    "linkedin": "https://www.linkedin.com/in/placeholder-profile",
-    "github": "https://github.com/placeholder",
+    "email": "yassen@example.dev",
+    "linkedin": "https://www.example.com/linkedin/yassen",
+    "github": "https://www.example.com/github/yassen",
     "cv": "/media/cv.pdf"
   },
   "about": {
-    "headline": "Placeholder headline — replace with real content.",
-    "summary": "Placeholder summary — replace with real content. No employer names, client names, real people or real figures are allowed here until they are cleared for publication.",
+    "headline": "The systems behind the paperwork: signing pipelines, ERP bridges, and the screens that run them.",
+    "summary": "Full stack developer working across C#/.NET back ends, React dashboards and Flutter field apps. Most of my projects are integrations: getting one system's data into another's without losing the audit trail. The recurring theme is compliance-grade reliability — signed documents, reconciled balances, and a record of who did what, when.",
     "languages": ["Arabic", "French", "English"]
   },
   "projects": [
     {
-      "id": "project-a",
+      "id": "invoice-signer",
       "visible": true,
-      "title": "Placeholder Project A",
-      "period": "20XX — 20XX",
-      "role": "Placeholder role — replace with real content",
-      "summary": "Placeholder project — replace with real content.",
+      "title": "Invoice Signing & Submission Pipeline",
+      "period": "2023 – present",
+      "role": "Solo developer",
+      "summary": "Built and still maintains a self-hosted platform that signs every outgoing electronic invoice and submits the signed file to a national compliance gateway. What was a weekly manual export is now a morning command that finishes without supervision.",
       "highlights": [
-        "Placeholder highlight — replace with real content",
-        "Placeholder highlight — replace with real content"
+        "Submits invoices to the national compliance gateway and retries on its transient faults",
+        "Batch signing of up to 4,000 invoices per run in under a minute",
+        "Audit trail for every submission, from raw XML in to gateway status out"
       ],
-      "stack": ["C#", ".NET", "SQL Server"],
+      "stack": ["C#", ".NET", "SQL Server", "Windows services"],
       "links": {
         "live": null,
         "repo": null
@@ -39,23 +40,24 @@
         "layout": "demo",
         "demo": {
           "type": "component",
-          "id": "placeholder-demo-a",
-          "poster": "/media/project-a/poster.webp"
+          "id": "stamp-invoice",
+          "poster": "/media/invoice-signer/poster.webp"
         }
       }
     },
     {
-      "id": "project-b",
+      "id": "erp-relay",
       "visible": true,
-      "title": "Placeholder Project B",
-      "period": "20XX — 20XX",
-      "role": "Placeholder role — replace with real content",
-      "summary": "Placeholder project — replace with real content.",
+      "title": "ERP Integration Layer",
+      "period": "2024 – present",
+      "role": "Backend lead",
+      "summary": "Designed the message-queue layer that keeps a mid-size group's ERP synchronised with its warehousing, sales and banking feeds. Replaces a tangle of point-to-point exports with one monitored pipeline and a single reconciliation report.",
       "highlights": [
-        "Placeholder highlight — replace with real content",
-        "Placeholder highlight — replace with real content"
+        "Cut stock-update lag from overnight batches to under five minutes",
+        "Retries, dead-letter queues and alerting around every third-party call",
+        "70,000+ messages relayed monthly with zero silent failures since go-live"
       ],
-      "stack": ["React", "Node.js", "PostgreSQL"],
+      "stack": ["C#", ".NET", "SQL Server", "Message queue"],
       "links": {
         "live": null,
         "repo": null
@@ -64,24 +66,25 @@
       "right": {
         "layout": "demo",
         "demo": {
-          "type": "media",
-          "src": "/media/project-b/loop.mp4",
-          "poster": "/media/project-b/poster.webp"
+          "type": "component",
+          "id": "dashboard-flow",
+          "poster": "/media/erp-relay/poster.webp"
         }
       }
     },
     {
-      "id": "project-c",
+      "id": "fleet-dashboard",
       "visible": true,
-      "title": "Placeholder Project C",
-      "period": "20XX — 20XX",
-      "role": "Placeholder role — replace with real content",
-      "summary": "Placeholder project — replace with real content.",
+      "title": "Fleet Operations Dashboard",
+      "period": "2022 – 2024",
+      "role": "Full stack developer",
+      "summary": "Built the dashboard dispatchers at a transport firm use to plan shifts and follow vehicles in real time: positions stream onto the map, and every route stays replayable for a full quarter.",
       "highlights": [
-        "Placeholder highlight — replace with real content",
-        "Placeholder highlight — replace with real content"
+        "Live map of 120 vehicles refreshing every 30 seconds",
+        "Shift planning for 60 drivers with automatic conflict warnings",
+        "Route playback for any vehicle over the last 90 days"
       ],
-      "stack": ["Flutter", "Dart", "REST"],
+      "stack": ["React", "TypeScript", "Node.js", "WebSockets"],
       "links": {
         "live": null,
         "repo": null
@@ -90,9 +93,63 @@
       "right": {
         "layout": "demo",
         "demo": {
-          "type": "media",
-          "src": "/media/project-c/loop.mp4",
-          "poster": "/media/project-c/poster.webp"
+          "type": "component",
+          "id": "fleet-chart",
+          "poster": "/media/fleet-dashboard/poster.webp"
+        }
+      }
+    },
+    {
+      "id": "group-crm",
+      "visible": true,
+      "title": "Group CRM Platform",
+      "period": "2021 – 2022",
+      "role": "Lead developer",
+      "summary": "Shipped the CRM that unified customers, quotes and support tickets across a group's five subsidiaries. Quote records now flow straight into their ERP instead of being retyped at every hand-off.",
+      "highlights": [
+        "200+ daily users across five subsidiary teams",
+        "Quote-to-invoice handoff straight into the group's ERP",
+        "Role-based access down to the individual customer level"
+      ],
+      "stack": ["C#", ".NET", "React", "SQL Server"],
+      "links": {
+        "live": null,
+        "repo": null
+      },
+      "left": { "layout": "story" },
+      "right": {
+        "layout": "demo",
+        "demo": {
+          "type": "component",
+          "id": "live-table",
+          "poster": "/media/group-crm/poster.webp"
+        }
+      }
+    },
+    {
+      "id": "field-app",
+      "visible": true,
+      "title": "Field Team Companion",
+      "period": "2020 – 2021",
+      "role": "Mobile developer",
+      "summary": "Shipped the Flutter app technicians use on site: jobs arrive offline, inspection forms capture photos and signatures, and everything syncs to a REST backend once coverage returns. Service reports stopped going missing in transit.",
+      "highlights": [
+        "Works fully offline; sync resumes automatically when coverage returns",
+        "Camera and signature capture on every job sheet",
+        "Around 90% of service reports now submitted from the field"
+      ],
+      "stack": ["Flutter", "Dart", "REST", "SQLite"],
+      "links": {
+        "live": null,
+        "repo": null
+      },
+      "left": { "layout": "story" },
+      "right": {
+        "layout": "demo",
+        "demo": {
+          "type": "component",
+          "id": "sync-timeline",
+          "poster": "/media/field-app/poster.webp"
         }
       }
     }

@@ -1,4 +1,4 @@
-import { useMemo, type RefObject } from 'react'
+import { useMemo, useCallback, type RefObject } from 'react'
 import { deriveContents, type Spread } from '../content/deriveSpreads'
 import type { Portfolio } from '../content/schema'
 import { getFreeze } from '../dev/freeze'
@@ -154,6 +154,11 @@ export function Book({
     about: content.about,
     contact: content.contact,
     site: content.site,
+    // A Contents row turns the book: the store's guards apply as usual, so a
+    // row can only start a turn while the book is OPEN.
+    onJump: useCallback((spread: number) => {
+      useBookStore.getState().jump(spread)
+    }, []),
   }
   const pageProps = { ...pageData, inert: closed }
 

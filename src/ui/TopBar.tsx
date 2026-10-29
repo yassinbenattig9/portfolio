@@ -27,9 +27,13 @@ export function TopBar({ site, contact }: TopBarProps) {
       </div>
 
       <nav className="topbar__actions" aria-label="Site">
-        {/* TODO(T3): the build script writes `/plain` in Phase 3. The link ships
-            now so the chrome and its layout are final; until then it 404s. */}
-        <PlainLink href="/plain" label="Plain version: the same portfolio as a fast HTML page">
+        {/* Phase 3: the build script generates /plain.html inside dist/ from
+            src/content/portfolio.json. Dev note: `npm run dev` has no dist/,
+            so this link 404s until `npm run build` runs once. */}
+        <PlainLink
+          href="/plain.html"
+          label="Plain version: the same portfolio as a fast HTML page"
+        >
           Plain version
         </PlainLink>
         <a

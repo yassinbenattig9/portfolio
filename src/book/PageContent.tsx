@@ -26,6 +26,12 @@ export interface PageContentProps {
   /** Contact page data (links and email). */
   readonly contact?: Contact
   readonly site?: Site
+  /**
+   * Called when a Contents row is activated, with the project's spread index.
+   * Only the `page` variant has controls; the sheet variant renders the same
+   * rows as inert spans, so a turn's clone can never own a second tab stop.
+   */
+  readonly onJump?: (spreadIndex: number) => void
 }
 
 const EYEBROWS: Readonly<Record<PageKind, string>> = {
@@ -70,6 +76,14 @@ function titleOf(page: Page, project: Project | undefined): string {
   return project?.title ?? page.key
 }
 
+/** What the demo block says while no component or media is registered yet. */
+function demoCopy(project: Project | undefined): { label: string; hint?: string } {
+  const demo = project?.right.demo
+  if (demo === undefined) return { label: 'Demo' }
+  if (demo.type === 'media') return { label: 'Demo media — registered in a later phase' }
+  return { label: 'Interactive demo — registered in a later phase', hint: demo.id }
+}
+
 function ProjectLinks({ project, variant }: { project: Project; variant: PageVariant }) {
   const live = project.links.live
   const repo = project.links.repo
@@ -110,6 +124,7 @@ export function PageContent({
   about,
   contact,
   site,
+  onJump,
 }: PageContentProps) {
   // The sheet variant deliberately sets no ids: it is a second rendering of a
   // page that already has one in the document.
@@ -128,14 +143,36 @@ export function PageContent({
             Contents
           </h2>
           <ol className="page__contents">
-            {(contents ?? []).map((entry) => (
-              <li className="page__contents-item" key={entry.projectId}>
-                <span className="page__contents-index" aria-hidden="true">
-                  {String(entry.spreadIndex).padStart(2, '0')}
-                </span>
-                <span className="page__contents-title">{entry.title}</span>
-              </li>
-            ))}
+            {(contents ?? []).map((entry) => {
+              const row = (
+                <>
+                  <span className="page__contents-index" aria-hidden="true">
+                    {String(entry.spreadIndex).padStart(2, '0')}
+                  </span>
+                  <span className="page__contents-title">{entry.title}</span>
+                  <span className="page__contents-period">{entry.period}</span>
+                </>
+              )
+
+              // The sheet variant is presentation only: no button, no tab stop.
+              // (The turn that a jump starts announces itself in the existing
+              // live region, so the row invents no extra announcement.)
+              return (
+                <li className="page__contents-item" key={entry.projectId}>
+                  {variant === 'sheet' ? (
+                    <span className="page__contents-row">{row}</span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="page__contents-row"
+                      onClick={() => onJump?.(entry.spreadIndex)}
+                    >
+                      {row}
+                    </button>
+                  )}
+                </li>
+              )
+            })}
           </ol>
         </>
       ) : null}
@@ -193,7 +230,10 @@ export function PageContent({
           </h2>
           {project === undefined ? null : <p className="page__meta">{project.period}</p>}
           <div className="page__demo" aria-hidden="true">
-            <span className="page__demo-label">Demo</span>
+            <span className="page__demo-label">{demoCopy(project).label}</span>
+            {demoCopy(project).hint === undefined ? null : (
+              <span className="page__demo-hint">{demoCopy(project).hint}</span>
+            )}
           </div>
           {project === undefined ? null : (
             <p className="page__stack">{project.stack.join(' · ')}</p>
@@ -248,11 +288,13 @@ export function PageContent({
                   GitHub
                 </PageLink>
               </li>
-              <li>
-                <PageLink href={contact.cv} variant={variant} label="Download the CV as a PDF">
-                  CV (PDF)
-                </PageLink>
-              </li>
+              {contact.cv ? (
+                <li>
+                  <PageLink href={contact.cv} variant={variant} label="Download the CV as a PDF">
+                    CV (PDF)
+                  </PageLink>
+                </li>
+              ) : null}
             </ul>
           )}
         </>

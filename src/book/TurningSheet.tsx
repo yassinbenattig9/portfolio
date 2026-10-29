@@ -73,6 +73,8 @@ export interface SheetPageData {
   readonly about: About
   readonly contact: Contact
   readonly site: Site
+  /** Accepted for prop symmetry, but ignored: the sheet variant has no controls. */
+  readonly onJump?: (spreadIndex: number) => void
 }
 
 export interface TurningSheetProps extends SheetPageData {

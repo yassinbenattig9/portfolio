@@ -34,6 +34,8 @@ export interface Spread {
 export interface ContentsEntry {
   readonly projectId: string;
   readonly title: string;
+  /** The project's period line, shown on the Contents row. */
+  readonly period: string;
   readonly spreadIndex: number;
 }
 
@@ -110,6 +112,13 @@ export function deriveContents(content: Portfolio, spreads: readonly Spread[]): 
       throw new Error(`deriveContents: spread ${spread.index} has no project "${spread.projectId}"`);
     }
 
-    return [{ projectId: project.id, title: project.title, spreadIndex: spread.index }];
+    return [
+      {
+        projectId: project.id,
+        title: project.title,
+        period: project.period,
+        spreadIndex: spread.index,
+      },
+    ];
   });
 }
