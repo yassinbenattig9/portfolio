@@ -1,6 +1,6 @@
 # The Logbook
 
-A portfolio whose navigation is a 3D hardcover book on a desk: the closed book opens, spreads turn, and each spread presents one project. One JSON file drives the book, its Contents page and, later, a plain HTML version of the same content.
+A portfolio whose navigation is a hardcover book on a desk: the closed book opens, spreads turn, and each spread presents one project. The turn is rendered with CSS 3D — no WebGL — and one JSON file drives the book, its Contents page and, later, a plain HTML version of the same content.
 
 The site is not deployed.
 
@@ -8,7 +8,6 @@ The site is not deployed.
 
 - Node 22.22.3 (pinned in `.nvmrc`)
 - npm
-- A browser with WebGL for the 3D scene
 
 ## Commands
 
@@ -18,29 +17,29 @@ The site is not deployed.
 | `npm run build` | `tsc --noEmit`, then `vite build` |
 | `npm run preview` | Serve the production build |
 | `npm run typecheck` | `tsc --noEmit` only |
-| `npm test` | `vitest run`; 124 tests across 5 files |
+| `npm test` | `vitest run`; 237 tests across 13 files |
 
 `npm install` has not been documented beyond the standard npm behaviour; dependencies are exact-pinned in `package.json`.
 
 ## Stack
 
-Vite 8.3.5, React 19.3.1, TypeScript (strict), three 0.186.1, @react-three/fiber 9.8.2, zustand 5.0.16, zod 4.6.7, vitest 5.0.5. Deliberately absent: drei, GSAP/Framer Motion, Tailwind, Playwright.
+Vite 8.3.5, React 19.3.1, TypeScript (strict), zustand 5.0.16, zod 4.6.7, vitest 5.0.5. Runtime dependencies are exactly four: `react`, `react-dom`, `zod`, `zustand`. Deliberately absent: three/React Three Fiber (removed), GSAP/Framer Motion, Tailwind, Playwright.
 
 ## Project structure
 
 | Path | Purpose |
 | --- | --- |
 | `src/content/` | `portfolio.json`, zod `schema.ts`, `loadContent.ts` (validate plus `migrate` seam keyed on `schemaVersion`), `deriveSpreads.ts` |
-| `src/state/` | `bookState.ts` zustand phase machine, `timing.ts` pure progress and easing |
-| `src/scene/` | The 3D book: scene, page turn, curl rig and pose maths |
-| `src/ui/` | `TopBar`, `Hint`, `PlainLink`, `NoWebGL` |
+| `src/state/` | `bookState.ts` zustand phase machine (CLOSED/OPENING/OPEN/TURNING/CLOSING, guards only, no stored progress), `timing.ts` pure progress and easing |
+| `src/book/` | The only module that owns the stage: `BookStage`, `Book`, `StaticPage`, `PageContent`, `TurningSheet`, pose and turn maths (`bookPose`, `turnFaces`, `curlShape`, `frameStep`, `sheetPose`, `motion`, `pager`, `pageLookup`), `book.css`, `desk.css` |
+| `src/ui/` | `TopBar`, `Hint`, `PlainLink` |
 | `src/dev/` | `freeze.ts`, `PerfOverlay.tsx` |
 
-`deriveSpreads.ts` is pure: Contents first, one spread per visible project in array order, closing spread last, page count forced even. Today that gives 5 spreads and 10 pages.
+`deriveSpreads.ts` is pure: Contents first, one spread per visible project in array order, closing spread last, page count forced even. Today that gives 5 spreads and 10 pages from 3 placeholder projects.
 
 ### The rollback rule
 
-Only `src/scene/` and `src/dev/` may import three or @react-three/fiber. `src/scene/` is the boundary: a CSS 3D fallback would replace it and reuse `src/content/`, `src/state/` and `src/ui/` untouched. Keep three imports out of the other folders.
+`src/book/` owns the stage. A future renderer change replaces only that directory; `src/content/`, `src/state/` and `src/ui/` are renderer-agnostic and must not import from `src/book/`. There is no file-swap fallback: React Three Fiber was removed entirely from the codebase, and the last R3F implementation survives only as the git tag `phase1-r3f`. If the owner ever wants it back, that tag is the rollback point.
 
 ## Editing content
 
@@ -66,18 +65,26 @@ TODO(owner): confirm the final content, media assets and any confidentiality rev
 
 ## Dev flags
 
-- `?perf` — frame-time panel. 3 s warm-up, 10 s window, `R` restarts. Reports p50/p95/p99, counts frames over 20 ms and over 33 ms, worst frame, and `renderer.info`.
-- `?freeze=<0..1>&dir=forward|back` — frozen still of the curl at a given progress. Requires the book to be open (press Space). A `back` still needs one ArrowRight first, because there is no backward turn from spread 0.
+- `?perf` — frame-time panel: rAF-interval frame times, long tasks, CLS and element count. 3 s warm-up, 10 s window, `R` restarts. This replaces the retired WebGL frame-budget panel as the honest measurement tool for the CSS pass bar (see `docs/phase1-decision.md`).
+- `?freeze=<0..1>&dir=forward|back` — frozen still of the turn at a given progress. Requires the book to be open (press Space). A `back` still needs one ArrowRight first, because there is no backward turn from spread 0.
+
+## CSS-3D invariants
+
+Maintainers must not break these; the flattening model depends on them.
+
+- No `overflow`, `clip-path`, `filter`, `opacity` below 1, `mask` or `mix-blend-mode` on `.book`, `.book__page*`, `.strip` or any of their ancestors. Flattening props live only on the leaves `.strip__clip` and `.strip__shade`.
+- Clipping stays on `.strip__clip`; do not move it up the tree.
+- The 0.75 px strip overlap in `book.css` is pinned by a comment there. It is only correct while all strips render identical page clones; change one, change both.
 
 ## Known limitations of this phase
 
 - Contents entries are derived and `jump()` is tested, but no UI element calls them.
-- Page turns are keyboard-only (arrow keys). Clicking the closed book opens it; an open book ignores page clicks.
-- No mobile layout. One 46rem breakpoint hides the role line, and the camera poses are landscape.
-- Reduced motion is honoured for CSS chrome only, not for the 3D curl.
-- `/plain` returns 404.
-- No sound.
+- Turns are keyboard- and text-driven; page-edge click and drag are not implemented. Mobile has swipe.
+- `/plain` returns 404 until Phase 3.
+- Real content is pending: 3 placeholder projects; no employer names or real figures anywhere in the repo.
+- No sound and no art assets.
+- Two cosmetic questions are open and the owner must judge them: whether the tilted CSS book reads as a real desk view, and whether the fold reads as paper (`?freeze=0.5`, both directions).
 
 ## Status
 
-Phase 1 is awaiting the owner's visual verdict; see `docs/phase1-decision.md`.
+Phase 1 is decided: the R3F page curl was rejected on visual grounds and the project fell back to a CSS-3D segmented faux-curl; three and R3F were removed. See `docs/phase1-decision.md`.
